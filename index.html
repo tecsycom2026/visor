@@ -3,604 +3,230 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tecsycom</title>
+  <title>Tecsycom – Visor</title>
   <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1865/1865269.png" type="image/x-icon">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    html,body{height:100%;margin:0;padding:0;overflow:hidden;font-family:sans-serif;}
+    #map{height:100vh;width:100%;}
+    #top-bar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1500;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.95);padding:6px 14px;border-radius:30px;box-shadow:0 2px 8px rgba(0,0,0,0.2);max-width:90vw;}
+    #top-bar h6{margin:0;font-size:13px;font-weight:bold;white-space:nowrap;}
+    #zone-select{font-size:12px;border:1px solid #ccc;border-radius:6px;padding:4px 8px;cursor:pointer;touch-action:manipulation;}
+    #conn-badge{font-size:11px;background:#28a745;color:white;padding:2px 8px;border-radius:10px;white-space:nowrap;}
+    #realtime-indicator{position:absolute;top:55px;left:50%;transform:translateX(-50%);z-index:1500;background:rgba(0,150,0,.85);color:#fff;font-size:11px;padding:4px 12px;border-radius:20px;display:none;white-space:nowrap;pointer-events:none;transition:opacity .5s;}
+    #realtime-indicator.show{display:block;}
+    #realtime-indicator.fade-out{opacity:0;}
+    #global-timer-overlay{position:absolute;top:55px;right:10px;background:rgba(255,200,0,.9);color:black;padding:4px 10px;border-radius:5px;z-index:1500;display:none;font-size:12px;font-weight:bold;max-width:45vw;text-align:center;}
+    #last-upload{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);z-index:1500;background:rgba(255,255,255,0.85);font-size:11px;padding:3px 10px;border-radius:10px;color:#555;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;}
+    .estado-label{background:transparent;border:none;padding:2px 5px;font-size:11px;white-space:nowrap;margin-left:20px;text-align:center;pointer-events:none;box-shadow:none;}
+    .estado-pendiente{font-weight:bold;color:black!important;background-color:yellow!important;border:none!important;box-shadow:none!important;}
+    .custom-marker-container{display:flex;align-items:center;flex-direction:row;}
+    .custom-pin{width:30px;height:30px;border-radius:50%;background:var(--color,#4285F4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.2em;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+    @keyframes arrowBounce{0%{transform:translateX(-50%) translateY(0)}100%{transform:translateX(-50%) translateY(-4px)}}
+    @keyframes arrowBounceRight{0%{transform:translateY(-50%) translateX(0)}100%{transform:translateY(-50%) translateX(5px)}}
 
-  <style id="app-style">
-    html, body { height:100%; margin:0; padding:0; overflow:hidden; }
-    #app-container { display:flex; height:100vh; width:100%; }
-    #sidebar { width:300px; height:100%; background-color:#f8f9fa; overflow-y:auto; transition:transform .3s ease; z-index:1000; box-shadow:2px 0 5px rgba(0,0,0,.1); }
-    #sidebar.collapsed { transform:translateX(-280px); }
-    #toggle-sidebar { position:absolute; left:300px; top:10px; z-index:1001; transition:left .3s ease; background-color:#fff; border-radius:0 4px 4px 0; box-shadow:2px 0 5px rgba(0,0,0,.1); }
-    #toggle-sidebar.collapsed { left:20px; }
-    #map-container { flex-grow:1; position:relative; height:100%; }
-    #map { height:100%; width:100%; }
-    #detail-panel { position:absolute; right:-400px; top:0; width:380px; height:100%; background-color:#fff; z-index:1000; box-shadow:-2px 0 5px rgba(0,0,0,.1); overflow-y:auto; transition:right .3s ease; padding:15px; }
-    #detail-panel.open { right:0; }
-    .close-panel { position:absolute; top:10px; right:10px; cursor:pointer; }
-    .accordion-button:not(.collapsed) { background-color:#e7f1ff; color:#0c63e4; }
-    .loading-overlay { position:absolute; top:0; left:0; width:100%; height:100%; background-color:rgba(255,255,255,.8); display:flex; justify-content:center; align-items:center; z-index:2000; }
-    .custom-pin { width:30px; height:30px; border-radius:50%; background:var(--color,#4285F4); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.5em; box-shadow:0 2px 8px rgba(0,0,0,.15); }
-    .filter-section { padding:10px; margin-bottom:10px; border-bottom:1px solid #dee2e6; }
-    .clear-filters { margin-top:10px; }
-    #style-legend { position:absolute; bottom:20px; right:10px; z-index:1001; }
-    #style-legend .dropdown-menu { min-width:160px; }
-    #collapseThree .accordion-body { background-color:#fff8e1; border:1px solid #ffecb3; }
-    #collapseThree .form-select,#collapseThree .form-control-sm { border-color:#ffa000; box-shadow:0 0 5px rgba(255,160,0,.5); }
-    .assign-category-image-btn { margin-left:.5rem; padding:.25rem .5rem; font-size:.9em; }
-    .visually-hidden { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; border:0!important; }
-    #kml-upload { position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer; }
-    @keyframes glow { 0%{box-shadow:0 0 5px rgba(255,0,0,.8)} 50%{box-shadow:0 0 20px rgba(255,0,0,1)} 100%{box-shadow:0 0 5px rgba(255,0,0,.8)} }
-    .glow { animation:glow 1s ease-in-out alternate 3; }
-    #coord-list { display:none; }
-    .estado-label { background:transparent; border:none; padding:2px 5px; font-size:11px; white-space:nowrap; margin-left:20px; text-align:center; pointer-events:none; box-shadow:none; }
-    .custom-marker-container { display:flex; align-items:center; flex-direction:row; }
-    .estado-en-camino { color:black!important; background-color:yellow!important; }
-    .estado-pendiente { font-weight:bold; color:black!important; background-color:yellow!important; border:none!important; box-shadow:none!important; }
-    .countdown-overlay { position:absolute; top:0; left:0; width:100%; background:rgba(255,255,0,.7)!important; color:black!important; font-weight:bold; text-align:center; z-index:10; pointer-events:none; }
-    .countdown-expired .custom-pin { background:#FF0000!important; }
-    #global-timer-overlay { position:absolute; top:10px; right:50%; transform:translateX(50%); background:rgba(255,255,0,.8)!important; color:black!important; padding:5px 10px; border-radius:5px; z-index:1500; }
-    @media(max-width:768px){ #sidebar{width:100%;transform:translateX(-100%)} #toggle-sidebar.collapsed{left:10px} #detail-panel{width:100%} }
-    .bg-yellow { background-color:yellow; }
-    .highlight-pendiente-8-12,.highlight-pendiente-12-16,.highlight-pendiente-16-20 { background-color:yellow!important; color:black!important; }
-    .bg-warning,.badge.bg-warning { background-color:yellow!important; color:black!important; }
-    .alert-danger { background-color:yellow!important; color:black!important; border-color:yellow!important; }
-    .tech-suggested-highlight { font-weight:bold; background-color:#ffeeba; border-radius:3px; padding:2px 4px; }
-    .context-menu { position:absolute; display:none; background-color:#fff; border:1px solid #ccc; border-radius:4px; box-shadow:0 2px 5px rgba(0,0,0,.2); padding:8px 0; z-index:2000; min-width:200px; max-height:300px; overflow-y:auto; }
-    .context-menu-item { padding:8px 12px; cursor:pointer; font-size:14px; white-space:nowrap; }
-    .context-menu-item:hover { background-color:#f0f0f0; }
-    .context-menu-separator { border-top:1px solid #e0e0e0; margin:4px 0; }
-    .context-menu-header { font-weight:bold; padding:8px 12px; background-color:#f5f5f5; border-bottom:1px solid #e0e0e0; }
-    .context-menu-input { margin:8px 12px; width:calc(100% - 24px); }
-    .context-menu-add-btn { margin:0 12px 8px; width:calc(100% - 24px); }
-    #realtime-indicator { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:1500; background:rgba(0,150,0,.85); color:#fff; font-size:12px; padding:5px 14px; border-radius:20px; display:none; white-space:nowrap; pointer-events:none; transition:opacity .5s; }
-    #realtime-indicator.show { display:block; }
-    #realtime-indicator.fade-out { opacity:0; }
-    #sidebar-style-legend li { cursor:pointer; padding:4px 8px; border-radius:4px; }
-    #sidebar-style-legend li.active { background:#0d6efd; color:#fff; }
-    @keyframes arrowBounce { 0%{transform:translateX(-50%) translateY(0)} 100%{transform:translateX(-50%) translateY(-4px)} }
-    @keyframes arrowBounceRight { 0%{transform:translateY(-50%) translateX(0)} 100%{transform:translateY(-50%) translateX(5px)} }
-    @keyframes garantiaPulse { 0%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.3)} 100%{opacity:1;transform:scale(1)} }
-
-    /* ── Botón Trazo de Ruta ── */
-    #route-trace-btn {
-      position: absolute;
-      top: 105px;
-      right: 10px;
-      z-index: 1002;
-      background: #fff;
-      border: 2px solid #ccc;
-      border-radius: 6px;
-      padding: 6px 10px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: bold;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: background .2s, border-color .2s;
-      white-space: nowrap;
+    /* ── Mobile ── */
+    @media(max-width:480px){
+      #top-bar{padding:5px 10px;gap:6px;}
+      #top-bar h6{font-size:11px;}
+      #zone-select{font-size:11px;padding:3px 6px;}
+      #conn-badge{font-size:10px;padding:2px 6px;}
+      #realtime-indicator{font-size:10px;top:50px;}
+      #global-timer-overlay{font-size:11px;top:50px;right:6px;}
+      #last-upload{font-size:10px;bottom:20px;}
+      .estado-label{font-size:9px;}
     }
-    #route-trace-btn.active { background: #198754; color: #fff; border-color: #198754; }
-    #route-trace-btn:hover:not(.active) { background: #f0fff4; border-color: #198754; }
-
-    /* ── Panel flotante: Técnicos sin gestión (Estado2 = PROGRAMADO) ── */
-    #free-techs-panel {
-      position: absolute;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1400;
-      background: rgba(255,255,255,0.97);
-      border: 2px solid #ffc107;
-      border-radius: 12px;
-      box-shadow: 0 4px 18px rgba(0,0,0,0.18);
-      min-width: 260px;
-      max-width: 92vw;
-      padding: 0;
-      font-size: 13px;
-      transition: opacity .3s;
-    }
-    #free-techs-panel.hidden { display: none !important; }
-    #free-techs-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: #ffc107;
-      border-radius: 10px 10px 0 0;
-      padding: 7px 12px;
-      font-weight: bold;
-      font-size: 13px;
-      color: #333;
-      cursor: pointer;
-      user-select: none;
-    }
-    #free-techs-header .ft-count {
-      background: #fff;
-      color: #333;
-      border-radius: 10px;
-      padding: 1px 8px;
-      font-size: 12px;
-      font-weight: bold;
-      margin-left: 6px;
-    }
-    #free-techs-header .ft-toggle-icon { font-size: 13px; margin-left: 8px; }
-    #free-techs-body { max-height: 210px; overflow-y: auto; padding: 8px 10px; }
-    #free-techs-body.collapsed { display: none; }
-    .free-tech-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 6px;
-      border-radius: 7px;
-      margin-bottom: 3px;
-      background: #fffde7;
-      border: 1px solid #ffe082;
-      cursor: default;
-    }
-    .free-tech-item .ft-icon { font-size: 16px; }
-    .free-tech-item .ft-name { flex: 1; font-weight: 600; color: #333; }
-    .free-tech-item .ft-orders {
-      background: #ffc107;
-      color: #333;
-      font-size: 11px;
-      font-weight: bold;
-      border-radius: 8px;
-      padding: 1px 7px;
-    }
-
-    /* ── Zone Drawing Tool ── */
-    #zone-draw-btn {
-      position: absolute;
-      top: 150px;
-      right: 10px;
-      z-index: 1002;
-      background: #fff;
-      border: 2px solid #ccc;
-      border-radius: 6px;
-      padding: 6px 10px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: bold;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: background .2s, border-color .2s;
-    }
-    #zone-draw-btn.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
-    #zone-draw-btn:hover:not(.active) { background: #f0f4ff; border-color: #0d6efd; }
-
-    #zone-draw-panel {
-      position: absolute;
-      top: 195px;
-      right: 10px;
-      z-index: 1002;
-      background: rgba(255,255,255,0.97);
-      border: 1px solid #dee2e6;
-      border-radius: 10px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-      padding: 12px 14px;
-      min-width: 220px;
-      display: none;
-      font-size: 13px;
-    }
-    #zone-draw-panel.open { display: block; }
-    #zone-draw-panel h6 { font-size: 13px; font-weight: bold; margin-bottom: 10px; }
-    .zdp-label { font-size: 11px; color: #666; margin-bottom: 3px; }
-    #zone-color-swatches { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-    .zone-swatch {
-      width: 24px; height: 24px; border-radius: 50%; cursor: pointer;
-      border: 3px solid transparent; transition: border-color .15s, transform .15s;
-    }
-    .zone-swatch.selected { border-color: #333; transform: scale(1.2); }
-    #zone-list { max-height: 160px; overflow-y: auto; margin-top: 8px; }
-    .zone-list-item {
-      display: flex; align-items: center; gap: 7px;
-      padding: 5px 6px; border-radius: 6px; margin-bottom: 4px;
-      background: #f8f9fa; border: 1px solid #e9ecef; font-size: 12px;
-      cursor: pointer;
-    }
-    .zone-list-item:hover { background: #e7f1ff; }
-    .zone-list-item .zli-color { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
-    .zone-list-item .zli-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .zone-list-item .zli-del { color: #dc3545; font-size: 14px; cursor: pointer; padding: 0 3px; flex-shrink: 0; }
-    .zone-list-item .zli-del:hover { color: #a00; }
-    #zone-opacity-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-    #zone-opacity-row input[type=range] { flex: 1; }
-    #zone-opacity-val { font-size: 12px; width: 28px; text-align: right; }
   </style>
 </head>
 <body>
-<div id="app-container">
-  <div id="sidebar">
-    <div class="p-3">
-      <h4 class="mb-3"><i class="fas fa-map"></i> Michell Sulca.V</h4>
-      <div id="last-upload-info" class="mb-1 small text-muted">
-        <i class="fas fa-clock me-1"></i>
-        <span id="last-upload-label">Ult. carga: —</span>
-      </div>
-      <div id="auth-status" class="mb-2">
-        <span class="badge bg-success"><i class="fas fa-cloud"></i> Supabase – tiempo real</span>
-      </div>
-      <div id="no-tech-summary" class="mb-3 text-muted"></div>
-      <div id="manual-coords-list" class="mb-4">
-        <div class="mb-2">
-          <h6>Coordenadas Agregadas</h6>
-          <div id="category-checkboxes" class="mt-2"></div>
-        </div>
-        <ul class="list-group list-group-sm" id="coord-list"></ul>
-      </div>
+<div id="map"></div>
 
-      <div class="accordion" id="accordionSidebar">
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">Filtros</button>
-          </h2>
-          <div id="collapseOne" class="accordion-collapse collapse show">
-            <div class="accordion-body">
-              <div class="filter-section">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="show-tooltips" checked>
-                  <label class="form-check-label" for="show-tooltips">Mostrar Estado</label>
-                </div>
-              </div>
-              <div class="filter-section">
-                <label class="form-label">Filtrar por Tramo:</label>
-                <select id="tramo-filter" class="form-select mb-2"><option value="">Todos los tramos</option></select>
-              </div>
-              <div class="filter-section">
-                <label class="form-label">Filtrar por Estado:</label>
-                <select id="estado-filter" class="form-select mb-2"><option value="">Todos los estados</option></select>
-              </div>
-              <div class="filter-section">
-                <label class="form-label">Filtrar por Distrito:</label>
-                <select id="distrito-filter" class="form-select mb-2"><option value="">Todos los distritos</option></select>
-              </div>
-              <div class="filter-section">
-                <label class="form-label">Filtrar por Técnico:</label>
-                <select id="tecnico-filter" class="form-select mb-2"><option value="">Todos los técnicos</option></select>
-              </div>
-              <div class="filter-section">
-                <label class="form-label">Filtrar por Negocio:</label>
-                <select id="negocio-filter" class="form-select mb-2"><option value="">Todos los negocios</option></select>
-              </div>
-              <div id="pending-format-section" class="filter-section">
-                <div class="mb-2">Formato Pendientes:</div>
-                <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="format-8-12"><label class="form-check-label" for="format-8-12">Pendiente 8/12</label></div>
-                <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="format-12-16"><label class="form-check-label" for="format-12-16">Pendiente 12/16</label></div>
-                <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="format-16-20"><label class="form-check-label" for="format-16-20">Pendiente 16/20</label></div>
-              </div>
-              <button id="clear-filters" class="btn btn-outline-secondary btn-sm">Limpiar filtros</button>
-
-              <div class="mb-4 p-3 border rounded bg-light mt-3">
-                <label class="form-label">Buscar por Código</label>
-                <div class="input-group input-group-sm">
-                  <input type="text" id="codigo-search" class="form-control" placeholder="Ingrese Código exacto">
-                  <button id="search-codigo-btn" class="btn btn-primary">Buscar</button>
-                </div>
-                <div id="codigo-search-msg" class="text-danger small mt-1"></div>
-              </div>
-
-              <div id="coord-entry" class="mb-4 p-3 border rounded bg-light">
-                <h6>Agregar Coordenada</h6>
-                <div class="mb-2"><label class="form-label">Ubicación (lat,lng)</label><input type="text" id="coord-input" class="form-control form-control-sm" placeholder="-12.04, -77.03"></div>
-                <div class="mb-2"><label class="form-label">Categoría</label>
-                  <select id="coord-category" class="form-select form-select-sm">
-                    <option value="">Seleccione...</option>
-                    <option value="Zona sin Cobertura">Zona sin Cobertura</option>
-                    <option value="Sin FFTT">Sin FFTT</option>
-                    <option value="Zona Peligrosa">Zona Peligrosa</option>
-                    <option value="Dirección de Técnicos">Dirección de Técnicos</option>
-                  </select>
-                </div>
-                <div class="mb-2"><label class="form-label">Imagen (jpg/png)</label><input type="file" id="coord-image" accept=".jpg,.png" class="form-control form-control-sm"></div>
-                <div class="mb-2"><label class="form-label">Nota (opcional)</label><input type="text" id="coord-note" class="form-control form-control-sm"></div>
-                <button id="save-coord" class="btn btn-primary btn-sm w-100">Guardar Coordenada</button>
-              </div>
-
-              <div class="mb-3 mt-3">
-                <label class="form-label">Zonal:</label>
-                <div>
-                  <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="zoneSelector" id="zone-lima" value="LIMA" checked><label class="form-check-label" for="zone-lima">LIMA</label></div>
-                  <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="zoneSelector" id="zone-provincia" value="PROVINCIA"><label class="form-check-label" for="zone-provincia">PROVINCIA</label></div>
-                </div>
-              </div>
-
-              <div class="filter-section">
-                <label class="form-label">Cargar archivo .xlsx:</label>
-                <div class="input-group">
-                  <input type="file" id="excel-upload" accept=".xlsx" class="visually-hidden" />
-                  <label for="excel-upload" class="btn btn-outline-primary btn-sm">Subir Archivo Maps</label>
-                </div>
-              </div>
-
-              <div class="filter-section mt-3">
-                <label class="form-label">Cargar archivo KML:</label>
-                <div class="input-group">
-                  <label class="btn btn-outline-primary btn-sm position-relative overflow-hidden">
-                    Subir KML
-                    <input type="file" id="kml-upload" accept=".kml" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;" />
-                  </label>
-                </div>
-                <div id="kml-upload-msg" class="small mt-1"></div>
-                <div class="form-check mt-2"><input class="form-check-input" type="checkbox" id="show-kml-points"><label class="form-check-label" for="show-kml-points">Mostrar Técnicos KML</label></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo">Estadísticas</button>
-          </h2>
-          <div id="collapseTwo" class="accordion-collapse collapse show">
-            <div class="accordion-body">
-              <div class="mb-3"><h6>Leyenda de Estilos de Mapa:</h6><ul id="sidebar-style-legend" class="list-unstyled"></ul></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree">Asignar Imagen a Técnico</button>
-          </h2>
-          <div id="collapseThree" class="accordion-collapse collapse show">
-            <div class="accordion-body">
-              <div class="mb-2"><label class="form-label">Técnico:</label><select id="image-tecnico-select" class="form-select"><option value="">Selecciona técnico</option></select></div>
-              <div><label class="form-label">Subir imagen (JPG/PNG):</label>
-                <div class="input-group"><input type="file" id="tech-image-upload" accept=".png,.jpg,.jpeg" class="visually-hidden" /><label for="tech-image-upload" class="btn btn-outline-primary btn-sm">Subir</label></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="tech-summary-panel" class="mb-4 p-3 border rounded bg-light mt-3">
-          <h6>Resumen por Técnico</h6>
-          <div id="tech-summary-content" class="small"><div class="text-center text-muted">Cargando...</div></div>
-        </div>
-
-        <!-- Panel gestión de PINs -->
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePins">🔐 Gestión de PINs</button>
-          </h2>
-          <div id="collapsePins" class="accordion-collapse collapse">
-            <div class="accordion-body">
-              <p class="small text-muted mb-2">Asigna un PIN inicial a cada técnico. El técnico podrá cambiarlo desde su visor.</p>
-              <div class="mb-2">
-                <label class="form-label small">Técnico:</label>
-                <select id="pin-tecnico-select" class="form-select form-select-sm">
-                  <option value="">Selecciona técnico</option>
-                </select>
-              </div>
-              <div class="mb-2">
-                <label class="form-label small">PIN (4 dígitos):</label>
-                <input type="number" id="pin-input" class="form-control form-control-sm" placeholder="Ej: 1234" maxlength="4" min="1000" max="9999">
-              </div>
-              <button id="save-pin-btn" class="btn btn-primary btn-sm w-100">Guardar PIN</button>
-              <div id="pin-msg" class="small mt-2"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <button id="toggle-sidebar" class="btn btn-sm btn-light"><i class="fas fa-bars"></i></button>
-
-  <div id="map-container">
-    <div id="map"></div>
-    <div id="realtime-indicator"><i class="fas fa-sync-alt fa-spin me-1"></i> Mapa actualizado en tiempo real</div>
-
-    <!-- Panel flotante: Técnicos pendientes (Estado2 = PROGRAMADO) -->
-    <div id="free-techs-panel" class="hidden">
-      <div id="free-techs-header">
-        <span>&#9888;&#65039; Técnicos Libres en Tramo Actual</span>
-        <span class="ft-count" id="free-techs-count">0</span>
-        <span class="ft-toggle-icon" id="free-techs-arrow">&#9650;</span>
-      </div>
-      <div id="free-techs-body">
-        <!-- Se rellena dinámicamente -->
-      </div>
-    </div>
-    <div id="detail-panel">
-      <span class="close-panel" id="close-detail"><i class="fas fa-times"></i></span>
-      <div id="record-details"></div>
-      <button id="delete-record" class="btn btn-danger mt-3">Eliminar registro</button>
-    </div>
-    <div class="loading-overlay" id="loading-overlay">
-      <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div>
-    </div>
-    <div class="dropdown" id="style-legend">
-      <button class="btn btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown"><span id="current-style-label">CartoDB Positron</span></button>
-      <ul class="dropdown-menu"></ul>
-    </div>
-
-    <!-- ── Botón Trazo de Ruta ── -->
-    <button id="route-trace-btn" title="Activar/desactivar trazo de ruta por técnico">
-      <i class="fas fa-route"></i> Trazo Ruta
-    </button>
-
-    <!-- ── Botón Dibujar Zona ── -->
-    <button id="zone-draw-btn" title="Dibujar zona en el mapa">
-      <i class="fas fa-draw-polygon"></i> Zonas
-    </button>
-
-    <!-- ── Panel de zonas ── -->
-    <div id="zone-draw-panel">
-      <h6><i class="fas fa-layer-group me-1"></i> Sectorizar Zonas</h6>
-
-      <div class="zdp-label">Nombre de la zona:</div>
-      <input type="text" id="zone-name-input" class="form-control form-control-sm mb-2" placeholder="Ej: Sector Norte">
-
-      <div class="zdp-label">Color:</div>
-      <div id="zone-color-swatches">
-        <div class="zone-swatch selected" data-color="#e74c3c" style="background:#e74c3c" title="Rojo"></div>
-        <div class="zone-swatch" data-color="#e67e22" style="background:#e67e22" title="Naranja"></div>
-        <div class="zone-swatch" data-color="#f1c40f" style="background:#f1c40f" title="Amarillo"></div>
-        <div class="zone-swatch" data-color="#2ecc71" style="background:#2ecc71" title="Verde"></div>
-        <div class="zone-swatch" data-color="#3498db" style="background:#3498db" title="Azul"></div>
-        <div class="zone-swatch" data-color="#9b59b6" style="background:#9b59b6" title="Morado"></div>
-        <div class="zone-swatch" data-color="#1abc9c" style="background:#1abc9c" title="Turquesa"></div>
-        <div class="zone-swatch" data-color="#e91e63" style="background:#e91e63" title="Rosa"></div>
-        <div class="zone-swatch" data-color="#607d8b" style="background:#607d8b" title="Gris"></div>
-      </div>
-
-      <div class="zdp-label">Opacidad relleno:</div>
-      <div id="zone-opacity-row">
-        <input type="range" id="zone-opacity" min="5" max="60" value="25">
-        <span id="zone-opacity-val">25%</span>
-      </div>
-
-      <button id="zone-start-draw" class="btn btn-primary btn-sm w-100 mb-2">
-        <i class="fas fa-pencil-alt me-1"></i> Iniciar dibujo
-      </button>
-      <button id="zone-finish-draw" class="btn btn-success btn-sm w-100 mb-2" style="display:none;">
-        <i class="fas fa-check me-1"></i> Finalizar zona (<span id="zone-pts-count">0</span> pts)
-      </button>
-      <button id="zone-cancel-draw" class="btn btn-outline-secondary btn-sm w-100 mb-3" style="display:none;">
-        <i class="fas fa-times me-1"></i> Cancelar
-      </button>
-
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <div class="zdp-label" style="margin:0;">Zonas guardadas:</div>
-        <div style="display:flex;gap:5px;align-items:center;">
-          <button id="zone-toggle-visibility" title="Mostrar / ocultar todas las zonas"
-            style="border:1px solid #ccc;border-radius:5px;padding:2px 7px;font-size:11px;background:#fff;cursor:pointer;display:flex;align-items:center;gap:4px;">
-            <i class="fas fa-eye" id="zone-eye-icon"></i> <span id="zone-vis-label">Visible</span>
-          </button>
-          <button id="zone-sync-btn" title="Sincronizar zonas con Supabase"
-            style="border:1px solid #0d6efd;border-radius:5px;padding:2px 7px;font-size:11px;background:#e7f1ff;color:#0d6efd;cursor:pointer;display:flex;align-items:center;gap:4px;">
-            <i class="fas fa-cloud-upload-alt" id="zone-sync-icon"></i> Sync
-          </button>
-        </div>
-      </div>
-      <div id="zone-sync-status" style="font-size:10px;color:#666;margin-bottom:6px;min-height:14px;"></div>
-      <div id="zone-list">
-        <div class="text-muted" style="font-size:11px;padding:4px;">Sin zonas aún</div>
-      </div>
-    </div>
-  </div>
+<!-- Barra superior -->
+<div id="top-bar">
+  <h6><i>🗺</i> Tecsycom – Visor</h6>
+  <select id="zone-select">
+    <option value="LIMA">LIMA</option>
+    <option value="PROVINCIA">PROVINCIA</option>
+  </select>
+  <span id="conn-badge" style="font-size:11px;background:#28a745;color:white;padding:2px 8px;border-radius:10px;">● En línea</span>
 </div>
-<div id="context-menu" class="context-menu"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<div id="realtime-indicator">🔄 Mapa actualizado</div>
+<div id="global-timer-overlay"></div>
+<div id="last-upload"><span id="last-upload-label">Última carga: —</span></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-
 <script>
-// ─── Supabase config ──────────────────────────────────────────────────────────
+// ─── Supabase ─────────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://jxpeztieqwotfgswhzhx.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4cGV6dGllcXdvdGZnc3doemh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4MzQ4MDQsImV4cCI6MjA4NjQxMDgwNH0.Hf-lbGlP2OmH7Uh2LNKqwHkwHDp7yQV6O73aXw5NCZk';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ─── Supabase helpers ─────────────────────────────────────────────────────────
-async function sbSave(table, zone, data) {
-  const { error } = await sb.from(table).upsert({ id: zone, zone, data, updated_at: new Date().toISOString() });
-  if (error) console.error(`sbSave ${table}:`, error);
+async function sbLoad(table, zone){
+  const {data,error}=await sb.from(table).select('data').eq('id',zone).single();
+  if(error) return null; return data?.data??null;
 }
-async function sbLoad(table, zone) {
-  const { data, error } = await sb.from(table).select('data').eq('id', zone).single();
-  if (error) return null;
-  return data?.data ?? null;
-}
-async function sbSaveGlobal(table, data) {
-  const { error } = await sb.from(table).upsert({ id: 'global', data, updated_at: new Date().toISOString() });
-  if (error) console.error(`sbSaveGlobal ${table}:`, error);
-}
-async function sbLoadGlobal(table) {
-  const { data, error } = await sb.from(table).select('data').eq('id', 'global').single();
-  if (error) return null;
-  return data?.data ?? null;
+async function sbLoadGlobal(table){
+  const {data,error}=await sb.from(table).select('data').eq('id','global').single();
+  if(error) return null; return data?.data??null;
 }
 
-// ─── Realtime subscriptions ───────────────────────────────────────────────────
-let _realtimeChannel = null;
+// ─── Globals ──────────────────────────────────────────────────────────────────
+let map, markers=[], allRecords=[], customCoords=[], techImages={}, categoryImages={};
+let selectedZone='LIMA', countdownInterval=null, _realtimeChannel=null, _fadeTimer=null;
+const techColors={};
 
-function subscribeToZone(zone) {
-  if (_realtimeChannel) { sb.removeChannel(_realtimeChannel); _realtimeChannel = null; }
+// ─── Map init ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async()=>{
+  map=L.map('map').setView([-12.0464,-77.0428],12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',{attribution:'&copy; CartoDB'}).addTo(map);
 
-  _realtimeChannel = sb.channel(`zone_${zone}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'records', filter: `id=eq.${zone}` }, payload => {
-      const incoming = payload.new?.data;
-      if (!incoming) return;
-      const prevCount = allRecords.length;
-      allRecords = Array.isArray(incoming) ? incoming : Object.values(incoming);
-      localStorage.setItem(`records_${zone}`, JSON.stringify(allRecords));
+  const go=document.createElement('div');go.id='global-timer-overlay';go.style.display='none';
+  document.body.appendChild(go);
+
+  document.getElementById('zone-select').addEventListener('change',function(){
+    selectedZone=this.value;
+    loadZoneData(selectedZone);
+  });
+
+  // Cargar datos globales
+  const fbTI=await sbLoadGlobal('tech_images');
+  if(fbTI) techImages=fbTI;
+
+  const fbCI=await sbLoadGlobal('category_images');
+  if(fbCI){
+    const {_lastUpload,...imgs}=fbCI;
+    categoryImages=imgs;
+    if(_lastUpload) document.getElementById('last-upload-label').textContent=`Última carga: ${_lastUpload}`;
+  }
+
+  await loadZoneData(selectedZone);
+  startCountdownTimer();
+  await loadGpsMarkers();
+  subscribeGps();
+});
+
+// ─── Load zone ────────────────────────────────────────────────────────────────
+async function loadZoneData(zone){
+  const [recData,coordData]=await Promise.all([sbLoad('records',zone),sbLoad('coords',zone)]);
+  allRecords  =Array.isArray(recData)   ?recData   :(recData   ?Object.values(recData)   :[]);
+  customCoords=Array.isArray(coordData) ?coordData :(coordData ?Object.values(coordData) :[]);
+  // Sonar si hay sin técnico al cargar
+  const sinTecnico=allRecords.filter(r=>!r.Tecnico).length;
+  if(sinTecnico>0){playNotificationSound();showSinTecnicoAlert(sinTecnico);}
+  _prevSinTecnicoCount=sinTecnico;
+  renderMarkers();
+  subscribeToZone(zone);
+}
+
+// ─── Realtime ─────────────────────────────────────────────────────────────────
+function subscribeToZone(zone){
+  if(_realtimeChannel){sb.removeChannel(_realtimeChannel);_realtimeChannel=null;}
+  _realtimeChannel=sb.channel(`visor_${zone}`)
+    .on('postgres_changes',{event:'*',schema:'public',table:'records',filter:`id=eq.${zone}`},payload=>{
+      const inc=payload.new?.data; if(!inc) return;
+      allRecords=Array.isArray(inc)?inc:Object.values(inc);
       checkNuevosSinTecnico(allRecords);
-      // Si la cantidad de registros cambió significativamente (carga nueva de XLSX),
-      // resetear zoom para que fitBounds ajuste la vista en todas las máquinas
-      const isMassiveChange = prevCount === 0 || Math.abs(allRecords.length - prevCount) > 5;
-      if (isMassiveChange) window._userHasZoomed = false;
-      populateFilters(); renderMarkers(); updateStatistics();
-      flashRealtimeIndicator('Registros actualizados');
+      renderMarkers(); flashIndicator('Registros actualizados');
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'coords', filter: `id=eq.${zone}` }, payload => {
-      const incoming = payload.new?.data;
-      if (!incoming) return;
-      customCoords = Array.isArray(incoming) ? incoming : Object.values(incoming);
-      localStorage.setItem(`customCoords_${zone}`, JSON.stringify(customCoords));
-      renderCustomCoordsList(); updateCategoryCheckboxes(); renderMarkers();
-      flashRealtimeIndicator('Coordenadas actualizadas');
+    .on('postgres_changes',{event:'*',schema:'public',table:'coords',filter:`id=eq.${zone}`},payload=>{
+      const inc=payload.new?.data; if(!inc) return;
+      customCoords=Array.isArray(inc)?inc:Object.values(inc);
+      renderMarkers(); flashIndicator('Coordenadas actualizadas');
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'tech_images', filter: `id=eq.global` }, payload => {
-      const incoming = payload.new?.data;
-      if (!incoming) return;
-      techImages = incoming;
-      localStorage.setItem('techImages', JSON.stringify(techImages));
-      renderMarkers();
-      flashRealtimeIndicator('Imágenes actualizadas');
+    .on('postgres_changes',{event:'*',schema:'public',table:'tech_images',filter:`id=eq.global`},payload=>{
+      const inc=payload.new?.data; if(!inc) return;
+      techImages=inc; renderMarkers(); flashIndicator('Imágenes actualizadas');
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'technician_list', filter: `id=eq.global` }, payload => {
-      const incoming = payload.new?.data;
-      if (!incoming) return;
-      // ── Siempre actualiza desde Supabase, nunca desde localStorage ──
-      technicianList = Array.isArray(incoming) ? incoming : Object.values(incoming);
-      localStorage.setItem('technicianList', JSON.stringify(technicianList));
-      flashRealtimeIndicator('Lista de técnicos actualizada');
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'category_images', filter: `id=eq.global` }, payload => {
-      const incoming = payload.new?.data;
-      if (!incoming) return;
-      const {_lastUpload, ...imgs} = incoming;
-      categoryImages = imgs;
-      localStorage.setItem('categoryImages', JSON.stringify(categoryImages));
-      if(_lastUpload) updateLastUploadLabel(_lastUpload);
-      renderMarkers();
-      flashRealtimeIndicator('Imágenes de categorías actualizadas');
+    .on('postgres_changes',{event:'*',schema:'public',table:'category_images',filter:`id=eq.global`},payload=>{
+      const inc=payload.new?.data; if(!inc) return;
+      const {_lastUpload,...imgs}=inc;
+      categoryImages=imgs;
+      if(_lastUpload) document.getElementById('last-upload-label').textContent=`Última carga: ${_lastUpload}`;
+      renderMarkers(); flashIndicator('Actualizado');
     })
     .subscribe();
 }
 
-// ─── GPS channel (independiente, no se destruye al cambiar zona) ──────────────
-let _gpsChannel = null;
+// ─── Sonido para nuevos registros sin técnico ─────────────────────────────────
+let _prevSinTecnicoCount=0;
+function checkNuevosSinTecnico(records){
+  const sinTecnico=records.filter(r=>!r.Tecnico).length;
+  if(_prevSinTecnicoCount>0 && sinTecnico>_prevSinTecnicoCount){
+    playNotificationSound();
+    showSinTecnicoAlert(sinTecnico);
+  }
+  _prevSinTecnicoCount=sinTecnico;
+}
+
+function showSinTecnicoAlert(total){
+  const el=document.getElementById('realtime-indicator');
+  if(!el) return;
+  if(window._fadeTimer) clearTimeout(window._fadeTimer);
+  el.classList.remove('fade-out');
+  el.classList.add('show');
+  el.style.background='rgba(220,53,69,0.92)';
+  el.innerHTML=`⚠ ${total} registro${total!==1?'s':''} sin técnico asignado`;
+  window._fadeTimer=setTimeout(()=>{
+    el.style.background='';
+    el.classList.add('fade-out');
+    setTimeout(()=>{el.classList.remove('show','fade-out');el.style.background='';},600);
+  },6000);
+}
+
+function playNotificationSound(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const playTone=(freq,start,dur)=>{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.frequency.value=freq;osc.type='sine';
+      gain.gain.setValueAtTime(0.3,ctx.currentTime+start);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
+      osc.start(ctx.currentTime+start);osc.stop(ctx.currentTime+start+dur);
+    };
+    playTone(880,0,0.15);playTone(1100,0.18,0.15);
+    if(Notification.permission==='granted'){
+      new Notification('Nueva orden sin técnico',{body:'Hay registros nuevos sin técnico asignado',icon:'https://cdn-icons-png.flaticon.com/512/1865/1865269.png'});
+    }
+  }catch(e){console.warn('Audio:',e);}
+}
+
+function flashIndicator(msg){
+  const el=document.getElementById('realtime-indicator');if(!el)return;
+  if(_fadeTimer)clearTimeout(_fadeTimer);
+  el.classList.remove('fade-out');el.classList.add('show');
+  el.textContent=`🔄 ${msg}`;
+  _fadeTimer=setTimeout(()=>{el.classList.add('fade-out');setTimeout(()=>el.classList.remove('show','fade-out'),600);},3000);
+}
+
+// ─── GPS tracking en tiempo real ──────────────────────────────────────────────
+let gpsMarkers={}, gpsLeafletMarkers={}, _gpsChannel=null;
+
+async function loadGpsMarkers(){
+  const{data,error}=await sb.from('user_locations').select('*');
+  if(error||!data) return;
+  data.forEach(u=>{gpsMarkers[u.id]={nombre:u.nombre,lat:u.lat,lng:u.lng,updated_at:u.updated_at};});
+  renderGpsMarkers();
+}
 
 function subscribeGps(){
-  if(_gpsChannel){ sb.removeChannel(_gpsChannel); _gpsChannel=null; }
-  _gpsChannel = sb.channel('gps_tracking')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'user_locations' }, payload => {
+  if(_gpsChannel){sb.removeChannel(_gpsChannel);_gpsChannel=null;}
+  _gpsChannel=sb.channel('visor_gps_tracking')
+    .on('postgres_changes',{event:'*',schema:'public',table:'user_locations'},payload=>{
       if(payload.eventType==='DELETE'){
         delete gpsMarkers[payload.old?.id];
       } else {
         const u=payload.new;
         if(u) gpsMarkers[u.id]={nombre:u.nombre,lat:u.lat,lng:u.lng,updated_at:u.updated_at};
       }
-      // Sin indicador para ubicación GPS
       renderGpsMarkers();
     })
-    .subscribe(status=>{
-      console.log('GPS channel status:', status);
-    });
-
-  // Polling de respaldo cada 5 segundos por si el realtime falla
-  if(window._gpsPolling) clearInterval(window._gpsPolling);
-  window._gpsPolling = setInterval(async()=>{
+    .subscribe();
+  // Polling cada 5 segundos como respaldo
+  if(window._visorGpsPolling) clearInterval(window._visorGpsPolling);
+  window._visorGpsPolling=setInterval(async()=>{
     const{data,error}=await sb.from('user_locations').select('*');
     if(error||!data) return;
     let changed=false;
@@ -614,90 +240,22 @@ function subscribeGps(){
     Object.keys(gpsMarkers).forEach(id=>{
       if(!data.find(u=>u.id===id)){delete gpsMarkers[id];changed=true;}
     });
-    if(changed){renderGpsMarkers();} // Actualización silenciosa en segundo plano
-  }, 5000);
-}
-
-// ─── Liberación automática de ubicaciones GPS a las 23:00 ────────────────────
-async function releaseGpsLocations(){
-  try {
-    const { error } = await sb.from('user_locations').delete().neq('id', '__never__');
-    if(error){ console.warn('releaseGpsLocations error:', error); return; }
-    gpsMarkers = {};
-    renderGpsMarkers();
-    console.log('[AutoRelease] Ubicaciones GPS liberadas a las 23:00');
-  } catch(e){ console.warn('releaseGpsLocations exception:', e); }
-}
-
-function scheduleNightRelease(){
-  function msUntil23(){
-    const now = new Date();
-    const target = new Date();
-    target.setHours(23, 0, 0, 0);
-    if(now >= target) target.setDate(target.getDate() + 1);
-    return target - now;
-  }
-  function armNext(){
-    const delay = msUntil23();
-    console.log(`[AutoRelease] Próxima liberación en ${Math.round(delay/60000)} min`);
-    setTimeout(async () => {
-      await releaseGpsLocations();
-      armNext();
-    }, delay);
-  }
-  armNext();
-}
-
-// ─── GPS Markers (ubicaciones en tiempo real de técnicos) ─────────────────────
-let gpsMarkers = {}; // { id: {nombre, lat, lng, updated_at} }
-let gpsLeafletMarkers = {};
-
-async function loadGpsMarkers(){
-  const {data,error}=await sb.from('user_locations').select('*');
-  if(error||!data) return;
-  data.forEach(u=>{ gpsMarkers[u.id]={nombre:u.nombre,lat:u.lat,lng:u.lng,updated_at:u.updated_at}; });
-  renderGpsMarkers();
+    if(changed) renderGpsMarkers();
+  },5000);
 }
 
 function renderGpsMarkers(){
-  // Eliminar markers que ya no están activos
+  // Eliminar markers que ya no están
   Object.keys(gpsLeafletMarkers).forEach(id=>{
-    if(!gpsMarkers[id]){ map.removeLayer(gpsLeafletMarkers[id]); delete gpsLeafletMarkers[id]; }
+    if(!gpsMarkers[id]){map.removeLayer(gpsLeafletMarkers[id]);delete gpsLeafletMarkers[id];}
   });
-  // Mover o crear markers
+  // Mover o crear
   Object.entries(gpsMarkers).forEach(([id,u])=>{
     if(gpsLeafletMarkers[id]){
-      // Ya existe → solo mover
-      gpsLeafletMarkers[id].setLatLng([u.lat, u.lng]);
-      const mins=Math.floor((Date.now()-new Date(u.updated_at))/60000);
-      gpsLeafletMarkers[id].bindPopup(`<div style="font-size:13px;"><strong>🚗 ${u.nombre}</strong><br><span style="color:#555;font-size:11px;">Hace ${mins<1?'menos de 1':mins} min</span></div>`);
+      gpsLeafletMarkers[id].setLatLng([u.lat,u.lng]);
     } else {
-      // No existe → crear — sonar sonido de conexión
-      playConnectionSound(u.nombre);
-      const iconHtml=`
-        <div style="position:relative;text-align:center;background:transparent;">
-          <div style="font-size:22px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.4));">🚗</div>
-          <div style="
-            background:white;
-            color:#333;
-            font-size:10px;
-            font-weight:bold;
-            padding:2px 8px;
-            border-radius:4px;
-            white-space:nowrap;
-            display:inline-block;
-            margin-top:2px;
-            box-shadow:0 1px 4px rgba(0,0,0,0.25);
-            border:1px solid #ddd;
-            max-width:150px;
-            overflow:hidden;
-            text-overflow:ellipsis;
-          ">${u.nombre}</div>
-        </div>`;
-      const marker=L.marker([u.lat,u.lng],{
-        icon:L.divIcon({className:'',html:iconHtml,iconSize:[80,50],iconAnchor:[16,16]}),
-        zIndexOffset:2000
-      }).addTo(map);
+      const iconHtml=`<div style="position:relative;text-align:center;background:transparent;"><div style="font-size:22px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.4));">🚗</div><div style="background:white;color:#333;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:8px;white-space:nowrap;margin-top:2px;box-shadow:0 1px 4px rgba(0,0,0,0.25);border:1px solid #ddd;">${u.nombre}</div></div>`;
+      const marker=L.marker([u.lat,u.lng],{icon:L.divIcon({className:'',html:iconHtml,iconSize:[80,50],iconAnchor:[16,16]}),zIndexOffset:2000}).addTo(map);
       const mins=Math.floor((Date.now()-new Date(u.updated_at))/60000);
       marker.bindPopup(`<div style="font-size:13px;"><strong>🚗 ${u.nombre}</strong><br><span style="color:#555;font-size:11px;">Hace ${mins<1?'menos de 1':mins} min</span></div>`);
       gpsLeafletMarkers[id]=marker;
@@ -705,2028 +263,131 @@ function renderGpsMarkers(){
   });
 }
 
-// ─── Realtime indicator ───────────────────────────────────────────────────────
-let _fadeTimer = null;
-function flashRealtimeIndicator(msg) {
-  const el = document.getElementById('realtime-indicator'); if (!el) return;
-  if (_fadeTimer) clearTimeout(_fadeTimer);
-  el.classList.remove('fade-out');
-  el.classList.add('show');
-  el.innerHTML = `<i class="fas fa-sync-alt fa-spin me-1"></i> ${msg}`;
-  _fadeTimer = setTimeout(() => {
-    el.classList.add('fade-out');
-    setTimeout(() => el.classList.remove('show', 'fade-out'), 600);
-  }, 3000);
-}
-
-// ─── Globals ──────────────────────────────────────────────────────────────────
-let map, markers = [], allRecords = [], techColors = {}, techImages = {}, customCoords = [];
-let currentRecord = null, technicianList = [], countdownInterval = null;
-window.currentSuggestions = [];
-let alertsEnabled = localStorage.getItem('alertsEnabled') !== 'false';
-let selectedZone = localStorage.getItem('selectedZone') || 'LIMA';
-const INTERVALS = [{name:'8/12',start:8,end:12},{name:'12/16',start:12,end:16},{name:'16/20',start:16,end:20}];
-
-const savedTI = localStorage.getItem('techImages');
-if (savedTI) techImages = JSON.parse(savedTI);
-const savedCC = localStorage.getItem(`customCoords_${selectedZone}`);
-if (savedCC) customCoords = JSON.parse(savedCC);
-let categoryImages = {}; // { "Zona sin Cobertura-LIMA": "base64...", ... }
-const savedCI = localStorage.getItem('categoryImages');
-if (savedCI) categoryImages = JSON.parse(savedCI);
-
-function normalizeString(s) { return s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase() : ''; }
-function showLoading(v) { document.getElementById('loading-overlay').style.display = v ? 'flex' : 'none'; }
-function updateLastUploadLabel(fecha){
-  const lbl=document.getElementById('last-upload-label');
-  if(lbl) lbl.textContent=`Ult. carga: ${fecha}`;
-}
-
-// ─── Sonido para nuevos registros sin técnico ─────────────────────────────────
-let _prevSinTecnicoCount = -1; // -1 = nunca inicializado
-function checkNuevosSinTecnico(records){
-  const sinTecnico = records.filter(r=>!r.Tecnico).length;
-  // Sonar si: es primera carga con sin técnico, O si aumentaron los sin técnico
-  if(sinTecnico > 0 && (_prevSinTecnicoCount === -1 || sinTecnico > _prevSinTecnicoCount)){
-    playNotificationSound();
-    showSinTecnicoAlert(sinTecnico);
-  }
-  _prevSinTecnicoCount = sinTecnico;
-}
-
-function showSinTecnicoAlert(total){
-  // Mostrar en el indicador superior
-  const el=document.getElementById('realtime-indicator');
-  if(!el) return;
-  if(window._fadeTimer) clearTimeout(window._fadeTimer);
-  el.classList.remove('fade-out');
-  el.classList.add('show');
-  el.style.background='rgba(220,53,69,0.92)';
-  el.innerHTML=`⚠ ${total} registro${total!==1?'s':''} sin técnico asignado`;
-  // Se queda visible 6 segundos
-  window._fadeTimer=setTimeout(()=>{
-    el.style.background='';
-    el.classList.add('fade-out');
-    setTimeout(()=>{el.classList.remove('show','fade-out');el.style.background='';},600);
-  },6000);
-}
-
-function playConnectionSound(nombre){
-  try{
-    const ctx=new(window.AudioContext||window.webkitAudioContext)();
-    const playTone=(freq,start,dur)=>{
-      const osc=ctx.createOscillator(),gain=ctx.createGain();
-      osc.connect(gain);gain.connect(ctx.destination);
-      osc.frequency.value=freq;osc.type='sine';
-      gain.gain.setValueAtTime(0.2,ctx.currentTime+start);
-      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
-      osc.start(ctx.currentTime+start);osc.stop(ctx.currentTime+start+dur);
-    };
-    // Tono de conexión: dos notas suaves ascendentes
-    playTone(600,0,0.12);
-    playTone(900,0.15,0.18);
-    flashRealtimeIndicator(`🚗 ${nombre} conectado`);
-  }catch(e){console.warn('Audio conexión:',e);}
-}
-
-function playNotificationSound(){
-  try{
-    // Crear tono de notificación con Web Audio API
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const playTone = (freq, start, duration) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      osc.type = 'sine';
-      gain.gain.setValueAtTime(0.3, ctx.currentTime + start);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + duration);
-    };
-    // Dos tonos ascendentes — señal de nuevo registro
-    playTone(880, 0,    0.15);
-    playTone(1100, 0.18, 0.15);
-    // Notificación del sistema si tiene permiso
-    if(Notification.permission==='granted'){
-      new Notification('Nueva orden sin técnico', {body:'Hay registros nuevos sin técnico asignado', icon:'https://cdn-icons-png.flaticon.com/512/1865/1865269.png'});
-    }
-  }catch(e){ console.warn('Audio error:',e); }
-}
-
-// ─── Init ─────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-  selectedZone = localStorage.getItem('selectedZone') || 'LIMA';
-  document.getElementById(`zone-${selectedZone.toLowerCase()}`).checked = true;
-
-  if (Notification.permission !== 'granted' && Notification.permission !== 'denied')
-    Notification.requestPermission();
-
-  document.querySelectorAll('input[name="zoneSelector"]').forEach(r => {
-    r.addEventListener('change', function() {
-      if (!this.checked) return;
-      selectedZone = this.value;
-      localStorage.setItem('selectedZone', selectedZone);
-      updateCheckboxVisibility();
-      showLoading(true);
-      loadZoneData(selectedZone);
-    });
-  });
-
-  initMap();
-  setupEventListeners();
-  setupStyleLegend();
-  setupCoordForm();
-
-  // Restaurar fecha de última carga desde Supabase
-  const savedUpload = localStorage.getItem('lastUploadDate');
-  if(savedUpload) updateLastUploadLabel(savedUpload);
-
-  ['format-8-12','format-12-16','format-16-20'].forEach(id => {
-    const el = document.getElementById(id); if (!el) return;
-    el.checked = localStorage.getItem(id) === 'true';
-    updateFormatToggleLabel(el);
-    el.addEventListener('change', function() { localStorage.setItem(id, this.checked); updateFormatToggleLabel(this); renderMarkers(); });
-  });
-
-  const showKml = document.getElementById('show-kml-points');
-  if (showKml) showKml.checked = localStorage.getItem('showKmlPoints') === 'true';
-
-  if (!localStorage.getItem('deletedRecordsByCategory'))
-    localStorage.setItem('deletedRecordsByCategory', JSON.stringify({}));
-
-  // ── Cargar imágenes técnicos ──────────────────────────────────────────────
-  const fbTI = await sbLoadGlobal('tech_images');
-  if (fbTI) { techImages = fbTI; localStorage.setItem('techImages', JSON.stringify(techImages)); }
-
-  // Restaurar fecha de última carga desde Supabase
-  const fbCatImg = await sbLoadGlobal('category_images');
-  if(fbCatImg){
-    const {_lastUpload, ...imgs} = fbCatImg;
-    categoryImages = imgs;
-    localStorage.setItem('categoryImages', JSON.stringify(categoryImages));
-    if(_lastUpload) updateLastUploadLabel(_lastUpload);
-  }
-
-  // ── Cargar lista de técnicos SIEMPRE desde Supabase (nunca localStorage) ──
-  localStorage.removeItem('technicianList'); // limpiar cache local siempre
-  const fbTL = await sbLoadGlobal('technician_list');
-  if (Array.isArray(fbTL) && fbTL.length > 0) {
-    // Supabase tiene datos → usarlos y actualizar localStorage
-    technicianList = fbTL;
-    localStorage.setItem('technicianList', JSON.stringify(technicianList));
-  } else {
-    // Primera vez que no hay nada en Supabase → subir lista base
-    technicianList = [
-      "JOSEP FABIAN","DANIEL COLMENAREZ","YENSIS GONZALEZ","JOSE TRAVEZAÑO",
-      "ANDERSON LANDAETA","KEVIN RUIZ","EDUARDO CHAFLOQUE","CARLOS ALBAN",
-      "JORGE CHAFLOQUE","EFRAIN TITO","JUAN MORENO","OMAR PALOMINO",
-      "JONY STUAR","EMERSON SOTO","WIDNE PEREZ","FERNANDO FALCON",
-      "ERIN TIHUAY","ALEXANDER AGUILAR","ERICK MORALES","LUIS CARRION",
-      "JOEL MANUEL","CRUZ OSORIO","EDISON PAGAN","MARTIN VASQUEZ",
-      "ALFONSO PEREZ","MARCO VALENCIA","DIEGO PEREZ","JONNY VEGA",
-      "DONATO PEREZ","JHONATHAN CAMACHO"
-    ];
-    localStorage.setItem('technicianList', JSON.stringify(technicianList));
-    await sbSaveGlobal('technician_list', technicianList);
-  }
-
-  document.addEventListener('click', e => {
-    const cm = document.getElementById('context-menu');
-    if (cm && !cm.contains(e.target)) cm.style.display = 'none';
-  });
-
-  showLoading(true);
-  await loadZoneData(selectedZone);
-  await loadGpsMarkers();
-  subscribeGps();
-  scheduleNightRelease(); // Liberación automática de ubicaciones a las 23:00
-});
-
-// ─── Load zone data ───────────────────────────────────────────────────────────
-async function loadZoneData(zone) {
-  try {
-    const [recData, coordData] = await Promise.all([
-      sbLoad('records', zone),
-      sbLoad('coords',  zone)
-    ]);
-
-    // Si Supabase tiene datos usarlos, si no usar localStorage como fallback
-    if(recData !== null){
-      allRecords = Array.isArray(recData) ? recData : Object.values(recData);
-      localStorage.setItem(`records_${zone}`, JSON.stringify(allRecords));
-    } else {
-      const local = localStorage.getItem(`records_${zone}`);
-      allRecords = local ? JSON.parse(local) : [];
-    }
-
-    if(coordData !== null){
-      customCoords = Array.isArray(coordData) ? coordData : Object.values(coordData);
-      localStorage.setItem(`customCoords_${zone}`, JSON.stringify(customCoords));
-    } else {
-      const local = localStorage.getItem(`customCoords_${zone}`);
-      customCoords = local ? JSON.parse(local) : [];
-    }
-
-    // Reset zoom para que fitBounds muestre los datos de la zona nueva
-    window._userHasZoomed = false;
-
-    populateFilters(); renderMarkers(); updateStatistics();
-    renderCustomCoordsList(); updateCategoryCheckboxes();
-    showLoading(false);
-    subscribeToZone(zone);
-  } catch(e) {
-    console.error('loadZoneData error:', e);
-    // Fallback a localStorage si Supabase falla
-    const localRec = localStorage.getItem(`records_${zone}`);
-    const localCoord = localStorage.getItem(`customCoords_${zone}`);
-    allRecords   = localRec   ? JSON.parse(localRec)   : [];
-    customCoords = localCoord ? JSON.parse(localCoord) : [];
-    window._userHasZoomed = false;
-    populateFilters(); renderMarkers(); updateStatistics();
-    renderCustomCoordsList(); updateCategoryCheckboxes();
-    showLoading(false);
-  }
-}
-
-// ─── Map ──────────────────────────────────────────────────────────────────────
-function initMap() {
-  map = L.map('map').setView([-12.0464, -77.0428], 12);
-  applyMapStyle(localStorage.getItem('selectedStyle') || MAP_STYLES[0].name);
-  const to = document.createElement('div');
-  to.id = 'global-timer-overlay'; to.style.display = 'none';
-  document.getElementById('map-container').appendChild(to);
-  // Detectar cuando el usuario hace zoom/pan manualmente
-  map.on('zoomend moveend', function(e){
-    if(e.type==='zoomend') window._userHasZoomed = true;
-  });
-  startCountdownTimer();
-}
-
-// ─── Event listeners ──────────────────────────────────────────────────────────
-function setupEventListeners() {
-  document.getElementById('toggle-sidebar')?.addEventListener('click', function() {
-    document.getElementById('sidebar').classList.toggle('collapsed');
-    this.classList.toggle('collapsed');
-  });
-  document.getElementById('close-detail')?.addEventListener('click', () => document.getElementById('detail-panel').classList.remove('open'));
-  document.getElementById('delete-record')?.addEventListener('click', () => { if (currentRecord) deleteRecord(currentRecord.id); });
-  document.getElementById('clear-filters')?.addEventListener('click', () => {
-    ['tramo-filter','estado-filter','tecnico-filter','negocio-filter','distrito-filter'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
-    applyFilters();
-  });
-  ['tramo-filter','estado-filter','tecnico-filter','negocio-filter','distrito-filter'].forEach(id =>
-    document.getElementById(id)?.addEventListener('change', applyFilters));
-  document.getElementById('excel-upload')?.addEventListener('change', handleExcelUpload);
-  document.getElementById('tech-image-upload')?.addEventListener('change', handleTechImageUpload);
-  document.getElementById('kml-upload')?.addEventListener('change', handleKmlUpload);
-  document.getElementById('search-codigo-btn')?.addEventListener('click', searchByCodigo);
-  document.getElementById('codigo-search')?.addEventListener('keypress', e => { if(e.key==='Enter') searchByCodigo(); });
-  document.getElementById('show-tooltips')?.addEventListener('change', function() { localStorage.setItem('showTooltips', this.checked); renderMarkers(); });
-  document.getElementById('show-kml-points')?.addEventListener('change', function() { localStorage.setItem('showKmlPoints', this.checked); renderMarkers(); });
-  document.getElementById('save-pin-btn')?.addEventListener('click', saveTecnicoPin);
-  document.body.appendChild(Object.assign(document.createElement('audio'), {id:'alert-sound', src:'https://www.soundjay.com/buttons/sounds/beep-07a.mp3'}));
-}
-
-// ─── PIN Management ───────────────────────────────────────────────────────────
-async function saveTecnicoPin(){
-  const tecnico=document.getElementById('pin-tecnico-select').value;
-  const pin=document.getElementById('pin-input').value.trim();
-  const msg=document.getElementById('pin-msg');
-  if(!tecnico){msg.innerHTML='<span class="text-danger">Selecciona un técnico.</span>';return;}
-  if(!/^\d{4}$/.test(pin)){msg.innerHTML='<span class="text-danger">El PIN debe tener exactamente 4 dígitos.</span>';return;}
-  const id=tecnico.replace(/\s+/g,'_').toLowerCase();
-  const{error}=await sb.from('technician_pins').upsert({id,pin,updated_at:new Date().toISOString()});
-  if(error){msg.innerHTML='<span class="text-danger">Error al guardar PIN.</span>';return;}
-  msg.innerHTML=`<span class="text-success">✓ PIN guardado para ${tecnico}</span>`;
-  document.getElementById('pin-input').value='';
-  setTimeout(()=>{msg.innerHTML='';},3000);
-}
-
-// ─── Filters ──────────────────────────────────────────────────────────────────
-function populateFilters() {
-  // Guardar valores activos antes de reconstruir los selects
-  const savedVals = {};
-  ['tramo-filter','estado-filter','tecnico-filter','negocio-filter','distrito-filter'].forEach(id => {
-    const el = document.getElementById(id); if (!el) return;
-    savedVals[id] = el.value;
-    el.innerHTML = el.options[0].outerHTML;
-  });
-  const tramos   = [...new Set(allRecords.map(r=>r.Tramo).filter(Boolean))].sort();
-  const estados  = [...new Set(allRecords.map(r=>r.Estado2).filter(Boolean))].sort();
-  const tecnicos = [...new Set(allRecords.map(r=>r.Tecnico).filter(Boolean))].sort();
-  const negocios = [...new Set(allRecords.map(r=>r.Negocio).filter(Boolean))].sort();
-  const distMap  = new Map();
-  allRecords.forEach(r => { if(r.Distrito){const n=normalizeString(r.Distrito);if(!distMap.has(n))distMap.set(n,r.Distrito);}});
-  const distritos = Array.from(distMap.values()).sort();
-  const tf=document.getElementById('tramo-filter'), ef=document.getElementById('estado-filter'),
-        tecf=document.getElementById('tecnico-filter'), nf=document.getElementById('negocio-filter'),
-        df=document.getElementById('distrito-filter');
-  tramos.forEach(t    => tf.insertAdjacentHTML('beforeend',   `<option value="${t}">${t}</option>`));
-  distritos.forEach(d => df.insertAdjacentHTML('beforeend',   `<option value="${d}">${d}</option>`));
-  ef.insertAdjacentHTML('beforeend','<option value="pendiente_combinado">PENDIENTE</option>');
-  estados.forEach(e   => ef.insertAdjacentHTML('beforeend',   `<option value="${e}">${e}</option>`));
-  tecnicos.forEach(t  => tecf.insertAdjacentHTML('beforeend', `<option value="${t}">${t}</option>`));
-  tecf.insertAdjacentHTML('beforeend','<option value="sin_tecnico">Sin técnico</option>');
-  negocios.forEach(n  => nf.insertAdjacentHTML('beforeend',   `<option value="${n}">${n}</option>`));
-  // Restaurar valores de filtro activos (no resetear si hay uno seleccionado)
-  ['tramo-filter','estado-filter','tecnico-filter','negocio-filter','distrito-filter'].forEach(id => {
-    const el = document.getElementById(id); if (!el) return;
-    if(savedVals[id]) el.value = savedVals[id];
-  });
-  const imgSel = document.getElementById('image-tecnico-select');
-  if (imgSel) {
-    imgSel.innerHTML = '<option value="">Selecciona técnico</option><option value="sin_tecnico">Sin técnico</option>';
-    tecnicos.forEach(t => imgSel.insertAdjacentHTML('beforeend', `<option value="${t}">${t}</option>`));
-  }
-  const pinSel = document.getElementById('pin-tecnico-select');
-  if (pinSel) {
-    pinSel.innerHTML = '<option value="">Selecciona técnico</option>';
-    tecnicos.forEach(t => pinSel.insertAdjacentHTML('beforeend', `<option value="${t}">${t}</option>`));
-  }
-  renderTechnicianSummary();
-}
-
-function getFilteredRecords(){
-  const t=document.getElementById('tramo-filter')?.value,
-        e=document.getElementById('estado-filter')?.value,
-        tech=document.getElementById('tecnico-filter')?.value,
-        neg=document.getElementById('negocio-filter')?.value,
-        dist=document.getElementById('distrito-filter')?.value;
-  let f=allRecords;
-  if(t) f=f.filter(r=>r.Tramo===t);
-  if(e){ if(e==='pendiente_combinado') f=f.filter(r=>['PROGRAMADO','EN CAMINO','COORDINADO'].includes(r.Estado2)); else f=f.filter(r=>r.Estado2===e); }
-  if(tech) f=f.filter(r=>tech==='sin_tecnico'?!r.Tecnico:r.Tecnico===tech);
-  if(neg)  f=f.filter(r=>r.Negocio===neg);
-  if(dist){const nd=normalizeString(dist);f=f.filter(r=>normalizeString(r.Distrito)===nd);}
-  return f;
-}
-
-function renderMarkers() {
-  const currentZoom = map.getZoom();
-  const currentCenter = map.getCenter();
-  clearMarkers();
-  // Siempre respetar filtros activos
-  renderMarkersFromRecords(getFilteredRecords());
-  if(!window._userHasZoomed){
-    if(markers.length>0) map.fitBounds(new L.featureGroup(markers).getBounds(),{padding:[50,50]});
-  } else {
-    map.setView(currentCenter, currentZoom, {animate:false});
-  }
-  // Actualizar trazos de ruta si están activos
-  if(typeof renderRouteTraces === 'function') renderRouteTraces();
-}
-
-function applyFilters() {
-  clearMarkers();
-  renderMarkersFromRecords(getFilteredRecords());
-  const t=document.getElementById('tramo-filter')?.value,
-        e=document.getElementById('estado-filter')?.value,
-        tech=document.getElementById('tecnico-filter')?.value,
-        neg=document.getElementById('negocio-filter')?.value,
-        dist=document.getElementById('distrito-filter')?.value;
-  if(markers.length>0 && (t||e||tech||neg||dist)){
-    window._userHasZoomed = false;
-    map.fitBounds(new L.featureGroup(markers).getBounds(),{padding:[50,50]});
-  }
-  if(typeof renderRouteTraces === 'function') renderRouteTraces();
-}
-
-function renderMarkersFromRecords(records) {
-  clearMarkers();
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderMarkers(){
+  markers.forEach(m=>map.removeLayer(m)); markers=[];
   const colors=['#4285F4','#EA4335','#FBBC05','#34A853','#8E24AA'];
-  [...new Set(records.map(r=>r.Tecnico).filter(Boolean))].forEach((t,i)=>{if(!techColors[t])techColors[t]=colors[i%colors.length];});
+  [...new Set(allRecords.map(r=>r.Tecnico).filter(Boolean))].forEach((t,i)=>{if(!techColors[t])techColors[t]=colors[i%colors.length];});
   techColors['sin_tecnico']='#9E9E9E';
-  const showTips=localStorage.getItem('showTooltips')!=='false';
-  const visCat={};
-  document.querySelectorAll('#category-checkboxes input[type="checkbox"]:checked').forEach(cb=>{
-    const z=cb.dataset.zone;if(!visCat[z])visCat[z]=[];visCat[z].push(cb.dataset.category);
-  });
-  records.forEach(record=>{
-    const lat=record.latitud_Y,lng=record.longitud_X;if(!lat||!lng)return;
+
+  allRecords.forEach(record=>{
+    const lat=record.latitud_Y,lng=record.longitud_X; if(!lat||!lng)return;
     const estado=record.Estado||'N/A';
     const color=record.Tecnico&&techColors[record.Tecnico]?techColors[record.Tecnico]:techColors['sin_tecnico'];
     const imgSrc=record.Tecnico?techImages[record.Tecnico]:techImages['sin_tecnico'];
-
-    // Detectar si tiene pendiente con tramo
-    const matchTramo=estado.match(/(8\/12|12\/16|16\/20)/);
-    const esPendiente=matchTramo&&/(pendiente|coord)/i.test(estado);
-    const iv=esPendiente?getIntervalFromRange(matchTramo[1]):null;
-    const now=new Date();
-    const nowSegs=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
-    const venceSegs=iv?iv.end*3600:null;
-    const alertaSegs=venceSegs?venceSegs-3600:null;
-    const yaVencio=venceSegs&&nowSegs>=venceSegs;
-    const enAlerta=alertaSegs&&nowSegs>=alertaSegs&&nowSegs<venceSegs;
-
-    // Flecha ↓ solo para pins sin técnico asignado
     const sinTecnico=!record.Tecnico;
-    const flechaHtml=sinTecnico?`<div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:20px;line-height:1;z-index:9998;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));animation:arrowBounce 1s ease-in-out infinite alternate;">▼</div>`:'';
+
+    // Detectar vencimiento
+    const match=estado.match(/(8\/12|12\/16|16\/20)/);
+    const esPend=match&&/(pendiente|coord)/i.test(estado);
+    const iv=esPend?getInterval(match[1]):null;
+    const now=new Date(),nowSegs=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
+    const venceSegs=iv?iv.end*3600:null;
+    const yaVencio=venceSegs&&nowSegs>=venceSegs;
+
+    const flechaHtml=sinTecnico&&!yaVencio?`<div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:20px;line-height:1;z-index:9998;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));animation:arrowBounce 1s ease-in-out infinite alternate;">▼</div>`:'';
+    const vencidoHtml=yaVencio?`<div class="countdown-overlay" style="display:block;background:rgba(200,0,0,0.90);color:white;font-weight:bold;position:absolute;top:-18px;left:0;min-width:55px;white-space:nowrap;font-size:10px;padding:2px 5px;border-radius:3px;z-index:9999;pointer-events:none;overflow:visible;">VENCIDO</div>`:'';
 
     // Flecha → roja para registros con Agencia: VENTA
     const esAgenciaVenta=record.Agencia&&String(record.Agencia).trim().toUpperCase()==='VENTA';
     const flechaVentaHtml=esAgenciaVenta?`<div style="position:absolute;top:50%;right:-20px;transform:translateY(-50%);font-size:18px;line-height:1;z-index:9998;pointer-events:none;color:#FF0000;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));animation:arrowBounceRight 0.8s ease-in-out infinite alternate;">◀</div>`:'';
 
-    // Badge 🧰 para registros con Negocio: GARANTÍA
+    // Badge 🛡️ top-left: Negocio GARANTÍA
     const esGarantia=record.Negocio&&['GARANTÍA','GARANTIA'].includes(String(record.Negocio).trim().toUpperCase());
-    const garantiaHtml=esGarantia?`<div style="position:absolute;top:-12px;left:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">🧰</div>`:'';
+    const garantiaHtml=esGarantia?`<div style="position:absolute;top:-12px;left:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">🛡️</div>`:'';
 
-    // Badge ♻️ para registros con Negocio: REITERATIVO
-    const esReiterativo=record.Negocio&&['REITERATIVO'].includes(String(record.Negocio).trim().toUpperCase());
+    // Badge ♻️ top-right: reiterativo
+    const esReiterativo=record.Reiterativo&&['SI','SÍ','S'].includes(String(record.Reiterativo).trim().toUpperCase());
     const reiterativoHtml=esReiterativo?`<div style="position:absolute;top:-12px;right:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">♻️</div>`:'';
 
-    // Badge 🚚 para registros con Negocio: POSTVENTA
+    // Badge 🚚 bottom-left: Negocio POSTVENTA / DUPLICADO ⛔
     const esPostventa=record.Negocio&&['POSTVENTA'].includes(String(record.Negocio).trim().toUpperCase());
-    const postventaHtml=esPostventa?`<div style="position:absolute;bottom:-12px;left:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">🚚</div>`:'';
+    const esDuplicado=record.Estado2&&String(record.Estado2).trim().toUpperCase()==='DUPLICADO';
+    const postventaHtml=esPostventa?`<div style="position:absolute;bottom:-12px;left:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">🚚</div>`:esDuplicado?`<div style="position:absolute;bottom:-12px;left:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">⛔</div>`:'';
 
-    // Badge 🔌 para registros con Negocio: AVERÍAS
+    // Badge 🔌 bottom-right: Negocio AVERÍAS
     const esAveria=record.Negocio&&['AVERÍAS','AVERIAS'].includes(String(record.Negocio).trim().toUpperCase());
     const averiaHtml=esAveria?`<div style="position:absolute;bottom:-12px;right:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">🔌</div>`:'';
 
-    // Badge ⛔ para registros con Estado2: DUPLICADO
-    const esDuplicado=record.Estado2&&String(record.Estado2).trim().toUpperCase()==='DUPLICADO';
-    const duplicadoHtml=esDuplicado?`<div style="position:absolute;bottom:-12px;left:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">⛔</div>`:'';
-
     let marker;
     if(imgSrc){
-      const wrapId=`mw-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      let overlayHtml='';
-      if(yaVencio) overlayHtml=`<div class="countdown-overlay" style="display:block;background:rgba(200,0,0,0.90);color:white;font-weight:bold;position:absolute;top:-14px;left:0;width:100%;text-align:center;font-size:10px;padding:1px;z-index:10;pointer-events:none;white-space:nowrap;">ORDEN VENCIDA</div>`;
-      const iconHtml=`<div id="${wrapId}" style="position:relative;width:30px;height:30px;overflow:visible;">${!yaVencio?flechaHtml:''}${flechaVentaHtml}${garantiaHtml}${reiterativoHtml}${postventaHtml}${averiaHtml}${duplicadoHtml}${overlayHtml}<img src="${imgSrc}" style="width:30px;height:30px;border-radius:50%;"/></div>`;
+      const iconHtml=`<div style="position:relative;width:30px;height:30px;overflow:visible;">${flechaHtml}${flechaVentaHtml}${garantiaHtml}${reiterativoHtml}${postventaHtml}${averiaHtml}${vencidoHtml}<img src="${imgSrc}" style="width:30px;height:30px;border-radius:50%;"/></div>`;
       marker=L.marker([lat,lng],{icon:L.divIcon({className:'',html:iconHtml,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map);
-      if(showTips)marker.bindTooltip(estado,{permanent:true,direction:'right',className:shouldApplyFormatting(estado)?'estado-label estado-pendiente':'estado-label',offset:[5,0]});
+      marker.bindTooltip(estado,{permanent:true,direction:'right',className:'estado-label',offset:[5,0]});
     } else {
-      let overlayHtml='';
-      if(yaVencio) overlayHtml=`<div class="countdown-overlay" style="display:block;background:rgba(200,0,0,0.90);color:white;font-weight:bold;position:absolute;top:-14px;left:0;width:30px;text-align:center;font-size:10px;padding:1px;z-index:10;pointer-events:none;white-space:nowrap;">ORDEN VENCIDA</div>`;
-      let html=`<div style="position:relative;overflow:visible;">${!yaVencio?flechaHtml:''}${flechaVentaHtml}${garantiaHtml}${reiterativoHtml}${postventaHtml}${averiaHtml}${duplicadoHtml}${overlayHtml}<div class="custom-pin" style="--color:${color}">${estado.charAt(0)}</div></div>`;
-      if(showTips)html+=`<div class="${shouldApplyFormatting(estado)?'estado-label estado-pendiente':'estado-label'}">${estado}</div>`;
+      let html=`<div style="position:relative;overflow:visible;">${flechaHtml}${flechaVentaHtml}${garantiaHtml}${reiterativoHtml}${postventaHtml}${averiaHtml}${vencidoHtml}<div class="custom-pin" style="--color:${color}">${estado.charAt(0)}</div></div>`;
+      html+=`<div class="estado-label">${estado}</div>`;
       marker=L.marker([lat,lng],{icon:L.divIcon({className:'custom-marker-container',html,iconSize:[100,30],iconAnchor:[15,15]})}).addTo(map);
     }
-    marker.on('contextmenu',e=>{e.originalEvent.preventDefault();showContextMenu(e.originalEvent.clientX,e.originalEvent.clientY,marker.record);});
+    marker.bindPopup(`<div style="font-size:13px;min-width:140px;"><strong>Técnico:</strong> ${record.Tecnico||'<em>Sin asignar</em>'}<br><strong>Negocio:</strong> ${record.Negocio||'—'}</div>`);
     marker.record=record;
-    marker.on('click',()=>showRecordDetails(record));
     markers.push(marker);
   });
-  const showKml=localStorage.getItem('showKmlPoints')==='true';
+
+  // Coordenadas KML
   customCoords.forEach(c=>{
-    // showKml solo aplica a categoría Dirección de Técnicos
-    if(c.kml && c.category==='Dirección de Técnicos' && !showKml)return;
     if(c.zone!==selectedZone)return;
-    const cz=c.zone||selectedZone;if(!visCat[cz]||!visCat[cz].includes(c.category))return;
     const catColors={'Zona sin Cobertura':'#FF5722','Sin FFTT':'#9C27B0','Zona Peligrosa':'#F44336','Dirección de Técnicos':'#3F51B5'};
-    // Usar imagen de categoryImages por categoría-zona (independiente por categoría)
-    const imgKey=`${c.category}-${cz}`;
-    const imgSrcCoord=categoryImages[imgKey]||c.imgData||null;
+    const imgKey=`${c.category}-${c.zone||selectedZone}`;
+    const imgSrc=categoryImages[imgKey]||c.imgData||null;
     let marker;
-    if(imgSrcCoord){
-      const wrapId=`cw-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const iconHtml=`<div id="${wrapId}" style="position:relative;width:30px;height:30px;overflow:visible;"><img src="${imgSrcCoord}" style="width:30px;height:30px;border-radius:50%;"/></div>`;
+    if(imgSrc){
+      const iconHtml=`<div style="position:relative;width:30px;height:30px;overflow:visible;"><img src="${imgSrc}" style="width:30px;height:30px;border-radius:50%;"/></div>`;
       marker=L.marker([c.lat,c.lng],{icon:L.divIcon({className:'',html:iconHtml,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map);
     } else {
       const col=catColors[c.category]||'#607D8B';
       marker=L.marker([c.lat,c.lng],{icon:L.divIcon({className:'custom-pin',html:`<div class="custom-pin" style="--color:${col}">?</div>`,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map);
     }
-    if(c.category==='Dirección de Técnicos'&&c.note)marker.bindTooltip(c.note,{permanent:true,direction:'right',className:'estado-label',offset:[5,0]});
+    if(c.category==='Dirección de Técnicos'&&c.note)
+      marker.bindTooltip(c.note,{permanent:true,direction:'right',className:'estado-label',offset:[5,0]});
     else marker.bindPopup(`<strong>${c.category}</strong><br>${c.note||''}`);
-    marker.on('click',()=>showRecordDetails(c));
     markers.push(marker);
   });
+
+  if(markers.length>0) map.fitBounds(new L.featureGroup(markers).getBounds(),{padding:[50,50]});
 }
 
-function clearMarkers(){markers.forEach(m=>map.removeLayer(m));markers=[];}
-
-// ─── TRAZO DE RUTA POR TÉCNICO ────────────────────────────────────────────────
-let routeTraceEnabled = localStorage.getItem('routeTraceEnabled') === 'true';
-let routeTraceLines = []; // Polylines de trazos en el mapa
-
-// Orden de tramos
-const TRAMO_ORDER = ['8/12', '12/16', '16/20'];
-
-// Estados que indican que una orden ya está en ejecución o terminada (marca inicio de ruta)
-const ESTADOS_EN_CURSO = ['EN PROCESO', 'FINALIZADO', 'EN CAMINO'];
-// Estados que son destinos válidos (orden pendiente)
-const ESTADOS_DESTINO = ['PROGRAMADO', 'COORDINADO', 'EN CAMINO'];
-
-function haversineDistance(lat1, lng1, lat2, lng2) {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-function clearRouteTraces() {
-  routeTraceLines.forEach(l => map.removeLayer(l));
-  routeTraceLines = [];
-}
-
-async function renderRouteTraces() {
-  clearRouteTraces();
-  if (!routeTraceEnabled) return;
-
-  // ── Helpers ──────────────────────────────────────────────────────────────
-  const norm     = v => (v||'').toString().trim().toUpperCase();
-  const esEnCurso = r => ['EN PROCESO','FINALIZADO','EN CAMINO'].includes(norm(r.Estado2));
-  const esDestino = r => ['PROGRAMADO','COORDINADO','EN CAMINO'].includes(norm(r.Estado2));
-  const coord     = r => ({ lat: parseFloat(r.latitud_Y), lng: parseFloat(r.longitud_X) });
-  const distPt    = (p, r) => haversineDistance(p.lat, p.lng, parseFloat(r.latitud_Y), parseFloat(r.longitud_X));
-  const fmtDist   = d => d < 1000 ? `${Math.round(d)}m` : `${(d/1000).toFixed(1)}km`;
-
-  const normTramo = v => {
-    const s = (v||'').toString().trim().toUpperCase();
-    // Acepta: "8/12", "12/16", "16/20" Y "8PM-12PM", "12PM-16PM", "16PM-20PM"
-    if (/^8.?PM.?12.?PM$/i.test(s)  || s === '8/12')  return '8/12';
-    if (/^12.?PM.?16.?PM$/i.test(s) || s === '12/16') return '12/16';
-    if (/^16.?PM.?20.?PM$/i.test(s) || s === '16/20') return '16/20';
-    // Intentar extraer números: "8PM-12PM" → 8,12
-    const nums = s.match(/(\d+)/g);
-    if (nums && nums.length >= 2) {
-      const a = parseInt(nums[0]), b = parseInt(nums[1]);
-      if (a===8  && b===12) return '8/12';
-      if (a===12 && b===16) return '12/16';
-      if (a===16 && b===20) return '16/20';
-    }
-    return s; // devolver tal cual si no matchea nada
-  };
-
-  // ── Agrupar por técnico ───────────────────────────────────────────────────
-  const byTech = {};
-  allRecords.forEach(r => {
-    if (!r.Tecnico || !r.latitud_Y || !r.longitud_X) return;
-    (byTech[r.Tecnico] = byTech[r.Tecnico] || []).push(r);
-  });
-
-  const techColorMap = techColors;
-
-  // ── Cache de rutas para no repetir peticiones ────────────────────────────
-  if (!window._routeCache) window._routeCache = {};
-
-  // ── Cola para espaciar peticiones (evitar rate-limit) ────────────────────
-  if (!window._routeQueue) {
-    window._routeQueue = [];
-    window._routeRunning = false;
-  }
-
-  function encolarRuta(fn) {
-    return new Promise((resolve, reject) => {
-      window._routeQueue.push({ fn, resolve, reject });
-      if (!window._routeRunning) procesarColaRutas();
-    });
-  }
-
-  async function procesarColaRutas() {
-    if (!window._routeQueue.length) { window._routeRunning = false; return; }
-    window._routeRunning = true;
-    const { fn, resolve, reject } = window._routeQueue.shift();
-    try { resolve(await fn()); } catch(e) { reject(e); }
-    setTimeout(procesarColaRutas, 400);
-  }
-
-  async function obtenerRutaCalles(lat1, lng1, lat2, lng2) {
-    const cacheKey = `${lat1.toFixed(5)},${lng1.toFixed(5)}-${lat2.toFixed(5)},${lng2.toFixed(5)}`;
-    if (window._routeCache[cacheKey]) {
-      console.log('[Trazo] Ruta desde cache');
-      return window._routeCache[cacheKey];
-    }
-
-    return encolarRuta(async () => {
-      // ── Intento 1: OSRM (gratuito, sin key, open source) ──────────────
-      try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=full&geometries=geojson`;
-        console.log('[Trazo] Llamando OSRM:', url);
-        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        const txt = await res.text();
-        console.log('[Trazo] OSRM respuesta status:', res.status, '| body inicio:', txt.substring(0,80));
-        const data = JSON.parse(txt);
-        if (data.code === 'Ok' && data.routes?.[0]?.geometry?.coordinates?.length > 1) {
-          const latlngs = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-          console.log('[Trazo] OSRM OK →', latlngs.length, 'puntos');
-          window._routeCache[cacheKey] = latlngs;
-          return latlngs;
-        }
-        throw new Error('OSRM sin ruta válida: ' + data.code);
-      } catch(e1) {
-        console.warn('[Trazo] OSRM falló:', e1.message);
-
-        // ── Intento 2: OpenRouteService con key pública ────────────────
-        try {
-          const url2 = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=5b3ce3597851110001cf6248a843cc6f6e2a4d5ba78c5a1f3e0b7b0c&start=${lng1},${lat1}&end=${lng2},${lat2}`;
-          console.log('[Trazo] Intentando ORS...');
-          const res2 = await fetch(url2, { signal: AbortSignal.timeout(8000) });
-          const data2 = await res2.json();
-          const coords = data2.features?.[0]?.geometry?.coordinates || [];
-          if (coords.length > 1) {
-            const latlngs = coords.map(c => [c[1], c[0]]);
-            console.log('[Trazo] ORS OK →', latlngs.length, 'puntos');
-            window._routeCache[cacheKey] = latlngs;
-            return latlngs;
-          }
-          throw new Error('ORS sin coordenadas');
-        } catch(e2) {
-          console.warn('[Trazo] ORS también falló:', e2.message);
-
-          // ── Intento 3: GraphHopper (gratuito con key demo) ─────────────
-          try {
-            const url3 = `https://graphhopper.com/api/1/route?point=${lat1},${lng1}&point=${lat2},${lng2}&vehicle=car&points_encoded=false&key=LijBPDQGfu7Iiq80w3HzwB4RUDJbMbj6l5NxCqiLTYQ`;
-            console.log('[Trazo] Intentando GraphHopper...');
-            const res3 = await fetch(url3, { signal: AbortSignal.timeout(8000) });
-            const data3 = await res3.json();
-            const pts = data3.paths?.[0]?.points?.coordinates || [];
-            if (pts.length > 1) {
-              const latlngs = pts.map(c => [c[1], c[0]]);
-              console.log('[Trazo] GraphHopper OK →', latlngs.length, 'puntos');
-              window._routeCache[cacheKey] = latlngs;
-              return latlngs;
-            }
-            throw new Error('GraphHopper sin puntos');
-          } catch(e3) {
-            console.error('[Trazo] Todas las APIs fallaron. Usando línea recta. Errores:', e1.message, '|', e2.message, '|', e3.message);
-            return [[lat1, lng1], [lat2, lng2]];
-          }
-        }
-      }
-    });
-  }
-
-  // ── Helper: dibujar trazo por calles (async) ─────────────────────────────
-  async function dibujarTrazo(pOrigen, destino, color, tec, tramoLabel, esPrincipal) {
-    const latD = parseFloat(destino.latitud_Y), lngD = parseFloat(destino.longitud_X);
-    const distM = haversineDistance(pOrigen.lat, pOrigen.lng, latD, lngD);
-
-    // Obtener ruta real por calles
-    const latlngs = await obtenerRutaCalles(pOrigen.lat, pOrigen.lng, latD, lngD);
-
-    const line = L.polyline(latlngs, {
-      color,
-      weight: esPrincipal ? 4 : 2,
-      dashArray: esPrincipal ? '10, 7' : '5, 10',
-      opacity: esPrincipal ? 0.90 : 0.55,
-      lineJoin: 'round'
-    }).addTo(map);
-
-    line.bindPopup(`
-      <div style="font-size:12px;min-width:180px;">
-        <strong>🔀 Trazo: ${tec}</strong><br>
-        <span style="color:#555;">Tramo: <b>${tramoLabel}</b></span><br>
-        <span>📍 → <b>${destino.Cliente || destino.Codigo || 'Cliente'}</b></span><br>
-        <span style="color:#888;">Estado: ${destino.Estado2}</span><br>
-        <span style="color:#888;">Distancia: ${fmtDist(distM)}</span>
-      </div>
-    `);
-    routeTraceLines.push(line);
-
-    // Ícono de flecha en el punto destino (solo trazo principal)
-    if (esPrincipal) {
-      const arrowIcon = L.divIcon({
-        className: '',
-        html: `<div style="
-          background:${color};color:white;border-radius:50%;
-          width:18px;height:18px;display:flex;align-items:center;
-          justify-content:center;font-size:11px;font-weight:bold;
-          box-shadow:0 1px 4px rgba(0,0,0,0.4);border:2px solid white;opacity:0.92;
-        ">→</div>`,
-        iconSize: [18,18], iconAnchor: [9,9]
-      });
-      const am = L.marker([latD, lngD], { icon: arrowIcon, zIndexOffset: 500 }).addTo(map);
-      am.bindPopup(`<b>Próximo destino</b><br>${destino.Cliente||destino.Codigo||''}<br>Tramo: ${tramoLabel}<br>Técnico: ${tec}`);
-      routeTraceLines.push(am);
-    }
-
-    return { lat: latD, lng: lngD };
-  }
-
-  // ── Procesar cada técnico (async para rutas por calles) ──────────────────
-  const tecEntries = Object.entries(byTech);
-  for (const [tec, orders] of tecEntries) {
-    const color = techColorMap[tec] || '#4285F4';
-
-    // ── PASO 1: encontrar el mejor ORIGEN global del técnico ─────────────
-    // Prioridad: EN PROCESO > EN CAMINO > FINALIZADO, en cualquier tramo
-    // Se busca en orden de tramos (el más avanzado gana)
-    let origenRecord = null;
-
-    // Buscar EN PROCESO primero (el que está activo ahora mismo)
-    for (let ti = 0; ti < TRAMO_ORDER.length; ti++) {
-      const enProceso = orders.filter(r => normTramo(r.Tramo) === TRAMO_ORDER[ti] &&
-        norm(r.Estado2) === 'EN PROCESO');
-      if (enProceso.length) { origenRecord = enProceso[enProceso.length - 1]; break; }
-    }
-    // Si no, EN CAMINO
-    if (!origenRecord) {
-      for (let ti = 0; ti < TRAMO_ORDER.length; ti++) {
-        const enCamino = orders.filter(r => normTramo(r.Tramo) === TRAMO_ORDER[ti] &&
-          norm(r.Estado2) === 'EN CAMINO');
-        if (enCamino.length) { origenRecord = enCamino[enCamino.length - 1]; break; }
-      }
-    }
-    // Si no, FINALIZADO (el último tramo finalizado)
-    if (!origenRecord) {
-      for (let ti = TRAMO_ORDER.length - 1; ti >= 0; ti--) {
-        const finalizados = orders.filter(r => normTramo(r.Tramo) === TRAMO_ORDER[ti] &&
-          norm(r.Estado2) === 'FINALIZADO');
-        if (finalizados.length) { origenRecord = finalizados[finalizados.length - 1]; break; }
-      }
-    }
-
-    // DEBUG: mostrar en consola qué encontró por técnico
-    console.log(`[Trazo] ${tec} → origen:`, origenRecord
-      ? `${origenRecord.Codigo} (Tramo raw:"${origenRecord.Tramo}" → norm:"${normTramo(origenRecord.Tramo)}" | Estado2:"${origenRecord.Estado2}")`
-      : 'ninguno');
-    // Mostrar todos los Estado2 únicos del técnico para diagnóstico
-    const estados2Unicos = [...new Set(orders.map(r => `"${r.Estado2}"`))];
-    console.log(`[Trazo] ${tec} → Estado2 únicos:`, estados2Unicos.join(', '));
-    const todosPendientes = orders.filter(esDestino);
-    console.log(`[Trazo] ${tec} → destinos:`, todosPendientes.map(r=>`${r.Codigo}(raw:"${r.Tramo}"→"${normTramo(r.Tramo)}" | ${r.Estado2})`));
-
-    // ── PASO 2: encontrar el tramo de inicio para buscar destinos ────────
-    // El tramo de origen nos dice desde dónde empezar a buscar pendientes
-    const tramoOrigenIdx = origenRecord
-      ? TRAMO_ORDER.indexOf(normTramo(origenRecord.Tramo))
-      : -1;
-
-    // ── PASO 3: recopilar TODOS los destinos pendientes, tramo por tramo ──
-    // Empezamos desde el tramo del origen (o desde 0 si no hay origen)
-    const startIdx = Math.max(tramoOrigenIdx, 0);
-
-    let puntoActual = origenRecord ? coord(origenRecord) : null;
-    let hayTrazoPrincipalDibujado = false;
-
-    for (let ti = startIdx; ti < TRAMO_ORDER.length; ti++) {
-      const tramo = TRAMO_ORDER[ti];
-      const destinos = orders.filter(r => normTramo(r.Tramo) === tramo && esDestino(r));
-
-      if (!destinos.length) {
-        // No hay pendientes en este tramo → continuar al siguiente tramo
-        continue;
-      }
-
-      // Si aún no tenemos punto de origen, no podemos trazar
-      // (caso: técnico sin ninguna orden en curso y primer tramo sin candidatos)
-      if (!puntoActual) {
-        // Sin origen: si hay ≥2 destinos en este tramo, usar el primero como pseudo-origen
-        if (destinos.length >= 2) {
-          puntoActual = coord(destinos[0]);
-          // Trazar desde pseudo-origen al más cercano de los restantes
-          const restantes = destinos.slice(1).sort((a,b) => distPt(puntoActual,a) - distPt(puntoActual,b));
-          puntoActual = await dibujarTrazo(puntoActual, restantes[0], color, tec, tramo, true);
-          hayTrazoPrincipalDibujado = true;
-          // Cadena secundaria con el resto
-          for (let i = 1; i < restantes.length; i++) {
-            puntoActual = await dibujarTrazo(puntoActual, restantes[i], color, tec, tramo, false);
-          }
-        }
-        // Si solo hay 1 destino y sin origen → no se puede trazar
-        continue;
-      }
-
-      // Ordenar destinos por distancia al punto actual
-      const destinosSorted = [...destinos].sort((a,b) => distPt(puntoActual,a) - distPt(puntoActual,b));
-
-      // Trazar principal al más cercano
-      const esPrincipal = !hayTrazoPrincipalDibujado;
-      puntoActual = await dibujarTrazo(puntoActual, destinosSorted[0], color, tec, tramo, esPrincipal);
-      hayTrazoPrincipalDibujado = true;
-
-      // Cadena secundaria con el resto del tramo
-      for (let i = 1; i < destinosSorted.length; i++) {
-        puntoActual = await dibujarTrazo(puntoActual, destinosSorted[i], color, tec, tramo, false);
-      }
-
-      // El último punto de este tramo es el nuevo origen para el siguiente tramo
-      // (ya actualizado en puntoActual en cada dibujarTrazo)
-    }
-  }
-}
-
-// Botón toggle
-document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('route-trace-btn');
-  if (!btn) return;
-  // Estado inicial
-  if (routeTraceEnabled) btn.classList.add('active');
-
-  btn.addEventListener('click', () => {
-    routeTraceEnabled = !routeTraceEnabled;
-    localStorage.setItem('routeTraceEnabled', routeTraceEnabled);
-    btn.classList.toggle('active', routeTraceEnabled);
-    if (routeTraceEnabled) {
-      renderRouteTraces();
-    } else {
-      clearRouteTraces();
-    }
-  });
-});
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ─── CRUD ─────────────────────────────────────────────────────────────────────
-function deleteRecord(recordId){
-  showLoading(true);
-  setTimeout(async()=>{
-    const isManual=customCoords.some(c=>c.id===recordId);
-    if(isManual){
-      customCoords=customCoords.filter(c=>c.id!==recordId);
-      localStorage.setItem(`customCoords_${selectedZone}`,JSON.stringify(customCoords));
-      await sbSave('coords',selectedZone,customCoords);renderCustomCoordsList();
-    } else {
-      allRecords=allRecords.filter(r=>r.id!==recordId);
-      localStorage.setItem(`records_${selectedZone}`,JSON.stringify(allRecords));
-      await sbSave('records',selectedZone,allRecords);populateFilters();
-    }
-    document.getElementById('detail-panel').classList.remove('open');
-    renderMarkers();updateStatistics();showLoading(false);
-    alert('Registro eliminado correctamente');
-  },300);
-}
-
-async function updateRecordTechnician(recordId,newTech){
-  const idx=allRecords.findIndex(r=>r.id===recordId);if(idx===-1)return;
-  allRecords[idx].Tecnico=newTech;
-  localStorage.setItem(`records_${selectedZone}`,JSON.stringify(allRecords));
-  await sbSave('records',selectedZone,allRecords);
-  renderMarkers();updateStatistics();showRecordDetails(allRecords[idx]);renderTechnicianSummary();
-}
-
-async function updateRecordObservation(recordId,obs){
-  const idx=allRecords.findIndex(r=>r.id===recordId);if(idx===-1)return;
-  allRecords[idx].Observaciones=obs;
-  localStorage.setItem(`records_${selectedZone}`,JSON.stringify(allRecords));
-  await sbSave('records',selectedZone,allRecords);
-  alert('Observación guardada correctamente');
-}
-
-async function updateManualCoordinate(coordId,newCat,newNote){
-  const idx=customCoords.findIndex(c=>c.id===coordId);if(idx===-1)return;
-  customCoords[idx].category=newCat;customCoords[idx].note=newNote;
-  localStorage.setItem(`customCoords_${selectedZone}`,JSON.stringify(customCoords));
-  await sbSave('coords',selectedZone,customCoords);
-  renderCustomCoordsList();updateCategoryCheckboxes();showRecordDetails(customCoords[idx]);
-  alert('Coordenada actualizada correctamente');
-}
-
-// ─── Excel upload ─────────────────────────────────────────────────────────────
-function handleExcelUpload(e){
-  const file=e.target.files[0];if(!file)return;
-  showLoading(true);
-  const reader=new FileReader();
-  reader.onload=async function(evt){
-    const wb=XLSX.read(new Uint8Array(evt.target.result),{type:'array'});
-    const json=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
-    const newRecords=[],coordMap=new Map();
-    json.forEach(row=>{
-      const lat=parseFloat(row.latitud_Y),lng=parseFloat(row.longitud_X);
-      if(isNaN(lat)||isNaN(lng))return;
-      const key=`${lat},${lng}`;if(coordMap.has(key))return;coordMap.set(key,true);
-      newRecords.push({id:row.id||row.ID||row.Codigo||Date.now()+Math.random(),Codigo:row.Codigo,Cliente:row.Cliente,Direccion:row.Direccion,longitud_X:lng,latitud_Y:lat,Ubicacion:row.Ubicacion,Location:row.Location||row.location||row.LOCATION||'',Distrito:row.Distrito,Tecnico:row.Tecnico,Estado:row.Estado,Observaciones:row.Observaciones,Estado2:row.Estado2,Tramo:row.Tramo,Negocio:row.Negocio,Agencia:row.Agencia||row.AGENCIA||''});
-    });
-    allRecords=newRecords;
-    window._userHasZoomed = false;
-    // Guardar y mostrar fecha/hora de última carga en Supabase (visible para todos)
-    const now=new Date();
-    const fechaStr=now.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+now.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    await sbSaveGlobal('category_images', {...(await sbLoadGlobal('category_images')||{}), _lastUpload: fechaStr});
-    updateLastUploadLabel(fechaStr);
-    localStorage.setItem(`records_${selectedZone}`,JSON.stringify(allRecords));
-    await sbSave('records',selectedZone,allRecords);
-    flashRealtimeIndicator(`${newRecords.length} registros publicados en tiempo real`);
-    _prevSinTecnicoCount=-1; // reset para detectar como primera carga
-    checkNuevosSinTecnico(allRecords);
-    populateFilters();renderMarkers();updateStatistics();showLoading(false);e.target.value='';
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-// ─── Tech image upload ────────────────────────────────────────────────────────
-function handleTechImageUpload(e){
-  const file=e.target.files[0],tecnico=document.getElementById('image-tecnico-select').value;
-  if(!file||!tecnico){alert('Debe seleccionar un técnico y una imagen');e.target.value='';return;}
-  const reader=new FileReader();
-  reader.onload=async function(evt){
-    techImages[tecnico]=evt.target.result;
-    localStorage.setItem('techImages',JSON.stringify(techImages));
-    await sbSaveGlobal('tech_images',techImages);
-    renderMarkers();alert(`Imagen asignada al técnico "${tecnico}" correctamente`);e.target.value='';
-  };
-  reader.readAsDataURL(file);
-}
-
-// ─── KML upload ───────────────────────────────────────────────────────────────
-function handleKmlUpload(e){
-  const file=e.target.files[0];if(!file)return;
-  const msgEl=document.getElementById('kml-upload-msg');
-  msgEl.textContent='Procesando KML...';msgEl.className='small mt-1 text-info';
-  const html=`<div class="modal fade" id="kmlCatModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Seleccionar Categoría</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><select id="kml-category-select" class="form-select"><option value="Zona sin Cobertura">Zona sin Cobertura</option><option value="Sin FFTT">Sin FFTT</option><option value="Zona Peligrosa">Zona Peligrosa</option><option value="Dirección de Técnicos">Dirección de Técnicos</option></select></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" id="kml-confirm-btn">Confirmar</button></div></div></div></div>`;
-  const mc=document.createElement('div');mc.innerHTML=html;document.body.appendChild(mc);
-  const modalEl=document.getElementById('kmlCatModal'),modal=new bootstrap.Modal(modalEl);modal.show();
-  document.getElementById('kml-confirm-btn').addEventListener('click',function(){
-    const cat=document.getElementById('kml-category-select').value;
-    modal.hide();showLoading(true);
-    const reader=new FileReader();
-    reader.onload=async function(evt){
-      try{
-        const doc=new DOMParser().parseFromString(evt.target.result,'text/xml');
-        const pms=doc.getElementsByTagName('Placemark');
-        const newCoords=[];
-        for(let i=0;i<pms.length;i++){
-          const pm=pms[i];
-          const name=pm.querySelector('name')?.textContent||'';
-          const coords=pm.getElementsByTagName('coordinates')[0]?.textContent.trim();
-          if(!coords)continue;const parts=coords.split(',');if(parts.length<2)continue;
-          const lng=parseFloat(parts[0]),lat=parseFloat(parts[1]);
-          if(isNaN(lat)||isNaN(lng))continue;
-          newCoords.push({id:Date.now()+i,lat,lng,category:cat,note:name,imgData:null,zone:selectedZone,kml:true});
-        }
-        // ── Acumular por categoría: elimina solo los KML de ESTA categoría y zona,
-        //    conserva las demás categorías intactas ──
-        const sinEstaCategoria=customCoords.filter(c=>!(c.kml&&c.zone===selectedZone&&c.category===cat));
-        customCoords=[...sinEstaCategoria,...newCoords];
-        localStorage.setItem(`customCoords_${selectedZone}`,JSON.stringify(customCoords));
-        await sbSave('coords',selectedZone,customCoords);
-        flashRealtimeIndicator(`${newCoords.length} puntos KML publicados en tiempo real`);
-        renderCustomCoordsList();updateCategoryCheckboxes();renderMarkers();
-        msgEl.textContent=`${newCoords.length} coordenadas procesadas.`;msgEl.className='small mt-1 text-success';
-        showLoading(false);
-      }catch(err){msgEl.textContent='Error KML: '+err.message;msgEl.className='small mt-1 text-danger';showLoading(false);}
-    };
-    reader.readAsText(file);
-  });
-  modalEl.addEventListener('hidden.bs.modal',()=>{if(mc.parentNode===document.body)document.body.removeChild(mc);});
-}
-
-// ─── Coord form ───────────────────────────────────────────────────────────────
-function setupCoordForm(){
-  document.getElementById('save-coord').addEventListener('click',()=>{
-    const loc=document.getElementById('coord-input').value.trim();
-    const cat=document.getElementById('coord-category').value;
-    if(!loc||!cat){alert('Debe ingresar ubicación y categoría.');return;}
-    const parts=loc.split(',').map(s=>parseFloat(s.trim()));
-    if(parts.length!==2||parts.some(isNaN)){alert('Formato inválido. Use "lat, lng"');return;}
-    const note=document.getElementById('coord-note').value.trim();
-    const file=document.getElementById('coord-image').files[0];
-    const entry={id:Date.now(),lat:parts[0],lng:parts[1],category:cat,note,imgData:null,zone:selectedZone};
-    if(file){const r=new FileReader();r.onload=e=>{entry.imgData=e.target.result;saveAndRenderCoord(entry);};r.readAsDataURL(file);}
-    else saveAndRenderCoord(entry);
-  });
-  document.getElementById('coord-input').addEventListener('input',function(){
-    const parts=this.value.trim().split(',').map(s=>parseFloat(s.trim()));
-    if(parts.length===2&&!parts.some(isNaN)){
-      if(window.tempPreviewMarker)map.removeLayer(window.tempPreviewMarker);
-      window.tempPreviewMarker=L.marker([parts[0],parts[1]],{icon:L.divIcon({className:'custom-pin',html:`<div class="custom-pin" style="--color:#4285F4;opacity:.6">📍</div>`,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map);
-      map.setView([parts[0],parts[1]],15);
-    }
-  });
-  updateCategoryCheckboxes();
-}
-
-async function saveAndRenderCoord(entry){
-  entry.zone=selectedZone;
-  const mm=new Map();
-  customCoords.forEach(c=>mm.set(`${c.lat},${c.lng},${c.zone}`,c));
-  const k=`${entry.lat},${entry.lng},${entry.zone}`;
-  const ex=mm.get(k);if(ex&&ex.imgData&&!entry.imgData)entry.imgData=ex.imgData;
-  mm.set(k,entry);customCoords=Array.from(mm.values());
-  localStorage.setItem(`customCoords_${selectedZone}`,JSON.stringify(customCoords));
-  await sbSave('coords',selectedZone,customCoords);
-  renderCustomCoordsList();updateCategoryCheckboxes();renderMarkers();
-  ['coord-input','coord-category','coord-note','coord-image'].forEach(id=>document.getElementById(id).value='');
-  alert('Coordenada guardada correctamente');
-}
-
-function updateCategoryCheckboxes(){
-  const container=document.getElementById('category-checkboxes');if(!container)return;
-  container.innerHTML='';
-  const counts={};
-  customCoords.forEach(c=>{const z=c.zone||selectedZone;const k=`${c.category}-${z}`;counts[k]=(counts[k]||0)+1;});
-  const uniq=[...new Set(customCoords.map(c=>c.category))];
-
-  // Etiquetas cortas por categoría
-  const shortName={'Zona sin Cobertura':'S/Cob','Sin FFTT':'S/FFTT','Zona Peligrosa':'Peligrosa','Dirección de Técnicos':'Técnicos'};
-
-  uniq.forEach(category=>{
-    ['LIMA','PROVINCIA'].forEach(zone=>{
-      const k=`${category}-${zone}`;if(!counts[k])return;
-      const catId=`category-${category.replace(/\s+/g,'-').toLowerCase()}-${zone}`;
-      const imgKey=`${category}-${zone}`;
-      const hasImg=!!categoryImages[imgKey];
-
-      // Fila única compacta
-      const div=document.createElement('div');
-      div.dataset.zone=zone;
-      div.style.cssText=`display:${zone===selectedZone?'flex':'none'};align-items:center;gap:4px;padding:3px 4px;margin-bottom:3px;background:#f8f9fa;border-radius:5px;border:1px solid #dee2e6;`;
-
-      // Checkbox
-      const cb=document.createElement('input');cb.type='checkbox';cb.id=catId;cb.dataset.category=category;cb.dataset.zone=zone;cb.checked=localStorage.getItem(catId)!=='false';cb.style.flexShrink='0';
-
-      // Label corto
-      const lbl=document.createElement('label');lbl.htmlFor=catId;
-      lbl.style.cssText='font-size:11px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;';
-      lbl.title=`${category} - ${zone}`;
-      lbl.textContent=`${shortName[category]||category} (${counts[k]})`;
-
-      // Botón imagen
-      const fileInp=document.createElement('input');fileInp.type='file';fileInp.accept='.jpg,.jpeg,.png';fileInp.className='visually-hidden';
-      const imgBtn=document.createElement('button');
-      imgBtn.style.cssText=`padding:1px 5px;font-size:10px;border-radius:3px;border:1px solid ${hasImg?'#28a745':'#6c757d'};background:${hasImg?'#28a745':'transparent'};color:${hasImg?'white':'#6c757d'};cursor:pointer;flex-shrink:0;`;
-      imgBtn.innerHTML=hasImg?'✓🖼':'🖼';
-      imgBtn.title=hasImg?`Cambiar imagen de "${category}"`:` Asignar imagen a "${category}"`;
-      imgBtn.addEventListener('click',()=>fileInp.click());
-      fileInp.addEventListener('change',async function(ev){
-        const f=ev.target.files[0];if(!f)return;
-        const rdr=new FileReader();
-        rdr.onload=async function(e2){
-          categoryImages[imgKey]=e2.target.result;
-          localStorage.setItem('categoryImages',JSON.stringify(categoryImages));
-          const current=await sbLoadGlobal('category_images')||{};
-          await sbSaveGlobal('category_images',{...current,...categoryImages});
-          updateCategoryCheckboxes();renderMarkers();fileInp.value='';
-        };rdr.readAsDataURL(f);
-      });
-
-      // Botón quitar imagen (solo si tiene)
-      if(hasImg){
-        const delImgBtn=document.createElement('button');
-        delImgBtn.style.cssText='padding:1px 5px;font-size:10px;border-radius:3px;border:1px solid #dc3545;background:transparent;color:#dc3545;cursor:pointer;flex-shrink:0;';
-        delImgBtn.innerHTML='✕';delImgBtn.title=`Quitar imagen de "${category}"`;
-        delImgBtn.addEventListener('click',async()=>{
-          delete categoryImages[imgKey];
-          localStorage.setItem('categoryImages',JSON.stringify(categoryImages));
-          const current=await sbLoadGlobal('category_images')||{};
-          delete current[imgKey];
-          await sbSaveGlobal('category_images',current);
-          updateCategoryCheckboxes();renderMarkers();
-        });
-        div.appendChild(delImgBtn);
-      }
-
-      // Botón limpiar
-      const clearBtn=document.createElement('button');
-      clearBtn.style.cssText='padding:1px 5px;font-size:10px;border-radius:3px;border:1px solid #dc3545;background:transparent;color:#dc3545;cursor:pointer;flex-shrink:0;';
-      clearBtn.innerHTML='🗑';clearBtn.title=`Eliminar todos los puntos de "${category}" - ${zone}`;
-      clearBtn.addEventListener('click',async()=>{
-        if(!confirm(`¿Eliminar todos los puntos de "${category}" - ${zone}?`))return;
-        customCoords=customCoords.filter(c=>!(c.category===category&&(c.zone||selectedZone)===zone));
-        localStorage.setItem(`customCoords_${selectedZone}`,JSON.stringify(customCoords));
-        await sbSave('coords',selectedZone,customCoords);
-        renderCustomCoordsList();updateCategoryCheckboxes();renderMarkers();
-        flashRealtimeIndicator(`"${category}" limpiado`);
-      });
-
-      div.appendChild(cb);div.appendChild(lbl);div.appendChild(imgBtn);div.appendChild(clearBtn);div.appendChild(fileInp);
-      container.appendChild(div);
-      cb.addEventListener('change',function(){localStorage.setItem(this.id,this.checked);renderMarkers();});
-    });
-  });
-}
-
-function updateCheckboxVisibility(){
-  document.querySelectorAll('#category-checkboxes div[data-zone]').forEach(div=>{
-    div.style.display=div.dataset.zone===selectedZone?'flex':'none';
-  });
-}
-
-function renderCustomCoordsList(){
-  const ul=document.getElementById('coord-list');ul.innerHTML='';
-  customCoords.forEach(c=>{
-    const li=document.createElement('li');li.className='list-group-item d-flex justify-content-between align-items-center';
-    li.innerHTML=`<div>${c.category} (${c.lat.toFixed(4)}, ${c.lng.toFixed(4)})<br><small>${c.note||''}</small></div><button class="btn btn-sm btn-danger">&times;</button>`;
-    li.querySelector('button').addEventListener('click',async()=>{
-      customCoords=customCoords.filter(x=>x.id!==c.id);
-      localStorage.setItem(`customCoords_${selectedZone}`,JSON.stringify(customCoords));
-      await sbSave('coords',selectedZone,customCoords);
-      renderCustomCoordsList();renderMarkers();
-    });
-    ul.appendChild(li);
-  });
-  updateCategoryCheckboxes();
-}
-
-function deleteRecordsByCategory(category){
-  const html=`<div class="modal fade" id="delCatModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Confirmar Eliminación</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>¿Eliminar permanentemente la categoría <strong>${category}</strong>?</p></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-danger" id="del-cat-confirm">Eliminar</button></div></div></div></div>`;
-  const mc=document.createElement('div');mc.innerHTML=html;document.body.appendChild(mc);
-  const modalEl=document.getElementById('delCatModal'),modal=new bootstrap.Modal(modalEl);modal.show();
-  document.getElementById('del-cat-confirm').addEventListener('click',async function(){
-    const toDelete=customCoords.filter(c=>c.category===category);
-    customCoords=customCoords.filter(c=>c.category!==category);
-    const del=JSON.parse(localStorage.getItem('deletedRecordsByCategory')||'{}');
-    del[category]=toDelete;
-    localStorage.setItem('deletedRecordsByCategory',JSON.stringify(del));
-    localStorage.setItem(`customCoords_${selectedZone}`,JSON.stringify(customCoords));
-    await sbSave('coords',selectedZone,customCoords);
-    renderCustomCoordsList();updateCategoryCheckboxes();renderMarkers();
-    document.getElementById('detail-panel').classList.remove('open');
-    modal.hide();alert(`Categoría "${category}" eliminada.`);
-  });
-  modalEl.addEventListener('hidden.bs.modal',()=>{if(mc.parentNode===document.body)document.body.removeChild(mc);});
-}
-
-async function restoreRecordsByCategory(category){
-  const del=JSON.parse(localStorage.getItem('deletedRecordsByCategory')||'{}');
-  if(!del[category]||!del[category].length)return;
-  customCoords=customCoords.concat(del[category]);delete del[category];
-  localStorage.setItem('deletedRecordsByCategory',JSON.stringify(del));
-  localStorage.setItem(`customCoords_${selectedZone}`,JSON.stringify(customCoords));
-  await sbSave('coords',selectedZone,customCoords);
-  renderCustomCoordsList();updateCategoryCheckboxes();renderMarkers();
-  document.getElementById('detail-panel').classList.remove('open');
-  alert(`Categoría "${category}" restaurada.`);
-}
-
-// ─── Detail panel ─────────────────────────────────────────────────────────────
-function showRecordDetails(record){
-  currentRecord=record;
-  const detailPanel=document.getElementById('detail-panel'),recordDetails=document.getElementById('record-details');
-  const isManual=!record.Codigo&&record.category!==undefined;
-  let html='';
-  if(isManual){
-    const catOpts=['Zona sin Cobertura','Sin FFTT','Zona Peligrosa','Dirección de Técnicos'].map(c=>`<option value="${c}"${c===record.category?' selected':''}>${c}</option>`).join('');
-    html=`<div class="mb-3 p-3 bg-light rounded"><h6>Coordenada Manual</h6><div><strong>Coordenadas:</strong> ${record.lat.toFixed(6)}, ${record.lng.toFixed(6)}</div></div>
-    <div class="row g-3"><div class="col-12"><strong>Categoría:</strong><select id="update-category-dropdown" class="form-select form-select-sm mt-1">${catOpts}</select></div>
-    <div class="col-12"><strong>Observación:</strong><textarea id="coord-observation" class="form-control mt-1">${record.note||''}</textarea></div>
-    <div class="col-12 mt-3"><button id="update-coord-btn" class="btn btn-primary">Actualizar Coordenada</button></div></div>
-    <div class="col-12 mt-3"><button id="delete-category-btn" class="btn btn-danger">Eliminar Todos de Esta Categoría</button>
-    <button id="restore-category-btn" class="btn btn-warning ms-2" style="display:none;">Restaurar Categoría</button></div>`;
-  } else {
-    const allTechs=[...new Set(allRecords.map(r=>r.Tecnico).filter(Boolean))];
-    const techOpts='<option value="">Sin asignar</option>'+allTechs.map(t=>`<option value="${t}"${t===record.Tecnico?' selected':''}>${t}</option>`).join('');
-    const eB=record.Estado==='Completado'?'bg-success':record.Estado==='En proceso'?'bg-primary':'bg-warning';
-    const e2B=record.Estado2==='Normal'?'bg-info':'bg-danger';
-    const isPend=record.Estado&&/(pendiente|coord).*?(8\/12|12\/16|16\/20)/i.test(record.Estado);
-    const countHtml='';
-    const sugg=!record.Tecnico?getTechnicianSuggestions(record):[];
-    window.currentSuggestions=sugg;
-    const suggHtml=sugg.length?`<div class="col-12 mt-2"><h6>Técnicos Sugeridos:</h6><div class="d-flex flex-wrap gap-2">${sugg.map(t=>`<button class="btn btn-sm btn-outline-primary tech-suggestion-btn" data-tech="${t}">${t}</button>`).join('')}</div></div>`:'';
-    html=`<div class="mb-2"><strong>Código:</strong> ${record.Codigo} <span class="ms-3"><strong>Negocio:</strong> ${record.Negocio}</span></div>
-    <div class="mb-3 p-3 bg-light rounded"><h6>${record.Cliente}</h6></div>
-    <div class="row g-3">
-    <div class="col-12"><strong>Dirección:</strong> ${record.Direccion}</div>
-    <div class="col-12"><strong>Location:</strong> ${record.Location ? `<a href="${record.Location}" target="_blank" class="text-break">${record.Location}</a>` : '<em class="text-muted">No disponible</em>'}</div>
-    <div class="col-12"><strong>Distrito:</strong> ${record.Distrito}</div>
-    <div class="col-12"><strong>Técnico:</strong><select id="assign-tech-dropdown" class="form-select form-select-sm mt-1">${techOpts}</select></div>
-    ${suggHtml}
-    <div class="col-6"><strong>Estado:</strong> <span class="badge ${eB}">${record.Estado}</span></div>
-    <div class="col-6"><strong>Estado 2:</strong> <span class="badge ${e2B}">${record.Estado2}</span></div>
-    ${record.Agencia?`<div class="col-12"><strong>Agencia:</strong> <span class="badge ${String(record.Agencia).trim().toUpperCase()==='VENTA'?'bg-danger':'bg-secondary'}">${record.Agencia}</span></div>`:''}
-    ${(record.Negocio&&['GARANTÍA','GARANTIA'].includes(String(record.Negocio).trim().toUpperCase()))?`<div class="col-12"><strong>Tipo:</strong> <span class="badge" style="background:#FF8C00;font-size:12px;">🧰 GARANTÍA</span> <small class="text-muted ms-1">Orden de reparación</small></div>`:''}
-    ${(record.Negocio&&String(record.Negocio).trim().toUpperCase()==='REITERATIVO')?`<div class="col-12"><strong>Tipo:</strong> <span class="badge" style="background:#17a2b8;font-size:12px;">♻️ REITERATIVO</span> <small class="text-muted ms-1">Orden reiterativa</small></div>`:''}
-    ${(record.Negocio&&String(record.Negocio).trim().toUpperCase()==='POSTVENTA')?`<div class="col-12"><strong>Tipo:</strong> <span class="badge" style="background:#28a745;font-size:12px;">🚚 POSTVENTA</span> <small class="text-muted ms-1">Orden de postventa</small></div>`:''}
-    ${(record.Negocio&&['AVERÍAS','AVERIAS'].includes(String(record.Negocio).trim().toUpperCase()))?`<div class="col-12"><strong>Tipo:</strong> <span class="badge" style="background:#6c757d;font-size:12px;">🔌 AVERÍAS</span> <small class="text-muted ms-1">Orden de avería</small></div>`:''}
-    ${(record.Estado2&&String(record.Estado2).trim().toUpperCase()==='DUPLICADO')?`<div class="col-12"><strong>Estado 2:</strong> <span class="badge" style="background:#dc3545;font-size:12px;">⛔ DUPLICADO</span> <small class="text-muted ms-1">Orden duplicada</small></div>`:''}
-    ${countHtml}
-    <div class="col-12"><strong>Observaciones:</strong><textarea id="record-observation" class="form-control mt-1">${record.Observaciones||''}</textarea>
-    <button id="save-observation-btn" class="btn btn-sm btn-outline-primary mt-2">Guardar Observación</button></div>
-    <div class="col-12"><strong>Tramo:</strong> ${record.Tramo}</div></div>
-    <div class="mt-4 border-top pt-3"><h6>Descargar Registros</h6><div class="btn-group">
-    <button id="download-excel" class="btn btn-sm btn-success"><i class="fas fa-file-excel me-1"></i> Excel</button>
-    <button id="download-csv" class="btn btn-sm btn-primary"><i class="fas fa-file-csv me-1"></i> CSV</button>
-    </div></div>`;
-  }
-  recordDetails.innerHTML=html;
-  if(isManual){
-    document.getElementById('update-coord-btn').addEventListener('click',()=>updateManualCoordinate(record.id,document.getElementById('update-category-dropdown').value,document.getElementById('coord-observation').value));
-    document.getElementById('delete-category-btn').addEventListener('click',()=>{if(confirm(`¿Eliminar todos de "${record.category}"?`))deleteRecordsByCategory(record.category);});
-    const del=JSON.parse(localStorage.getItem('deletedRecordsByCategory')||'{}');
-    if(del[record.category]&&del[record.category].length>0){
-      const rb=document.getElementById('restore-category-btn');rb.style.display='inline-block';
-      rb.addEventListener('click',()=>{if(confirm(`¿Restaurar ${del[record.category].length} registros?`))restoreRecordsByCategory(record.category);});
-    }
-  } else {
-    document.getElementById('assign-tech-dropdown').addEventListener('change',function(){updateRecordTechnician(record.id,this.value);});
-    document.getElementById('save-observation-btn').addEventListener('click',()=>updateRecordObservation(record.id,document.getElementById('record-observation').value));
-    document.getElementById('download-excel').addEventListener('click',downloadRecordsAsExcel);
-    document.getElementById('download-csv').addEventListener('click',downloadRecordsAsCSV);
-    document.querySelectorAll('.tech-suggestion-btn').forEach(btn=>btn.addEventListener('click',function(){
-      updateRecordTechnician(record.id,this.getAttribute('data-tech'));
-      const u=allRecords.find(r=>r.id===record.id);if(u)showRecordDetails(u);
-    }));
-  }
-  detailPanel.classList.add('open');
-  renderTechnicianSummary();
-}
-
-function updateStatistics(){
-  const n=allRecords.filter(r=>!r.Tecnico).length;
-  const el=document.getElementById('no-tech-summary');
-  if(el)el.innerHTML=`Sin técnico: <span class="badge bg-secondary">${n}</span> registros`;
-  updateFreeTechsPanel();
-}
-
-// ─── Panel flotante: técnicos sin gestión activa en el tramo en curso ────────
-function updateFreeTechsPanel(){
-  const panel=document.getElementById('free-techs-panel');
-  const body=document.getElementById('free-techs-body');
-  const countEl=document.getElementById('free-techs-count');
-  if(!panel||!body||!countEl) return;
-
-  // ── Tramo en curso según hora del sistema ─────────────────────────────────────
-  // Extrae todos los números del string Tramo y verifica si los dos primeros
-  // corresponden al tramo activo. Ej: "12PM-16PM" → [12,16], "8/12" → [8,12]
-  const nowHour = new Date().getHours(); // 0-23
-  // Devuelve true si el string de tramo pertenece al rango [start, end)
-  function tramoEnCurso(tramoStr){
-    if(!tramoStr) return false;
-    const nums = (tramoStr.toString().match(/\d+/g)||[]).map(Number);
-    if(nums.length < 2) return false;
-    const ini = nums[0]; // primer número = hora inicio
-    const fin = nums[1]; // segundo número = hora fin
-    // El tramo coincide si nowHour cae dentro de [ini, fin)
-    return nowHour >= ini && nowHour < fin;
-  }
-
-  // Estados que bloquean la aparición en el listado flotante
-  const ESTADOS_BLOQUEANTES = new Set(['PROGRAMADO','EN CAMINO','EN PROCESO','COORDINADO']);
-  const EXCLUIDOS = ['MICHELL SULCA','ROSA GALVEZ','WENDY PUELL'];
-
-  const techTotal = {};
-  const techBloqueado = new Set();
-
-  allRecords.forEach(r => {
-    if(!r.Tecnico) return;
-    techTotal[r.Tecnico] = (techTotal[r.Tecnico]||0) + 1;
-
-    const e2 = r.Estado2 ? r.Estado2.trim().toUpperCase() : '';
-
-    // Bloquear si tiene al menos 1 FINALIZADO en cualquier tramo (ya tiene producción)
-    if(e2 === 'FINALIZADO'){
-      techBloqueado.add(r.Tecnico);
-      return;
-    }
-
-    // Bloquear si tiene orden activa (PROGRAMADO/EN CAMINO/etc) en el tramo en curso
-    if(ESTADOS_BLOQUEANTES.has(e2) && tramoEnCurso(r.Tramo)){
-      techBloqueado.add(r.Tecnico);
-    }
-  });
-
-  const freeTechs = Object.keys(techTotal)
-    .filter(t =>
-      !techBloqueado.has(t) &&
-      !EXCLUIDOS.includes(t.trim().toUpperCase())
-    )
-    .map(t => [t, techTotal[t]])
-    .sort((a,b) => a[0].localeCompare(b[0]));
-
-  if(freeTechs.length === 0){
-    panel.classList.add('hidden');
-    return;
-  }
-
-  panel.classList.remove('hidden');
-  countEl.textContent = freeTechs.length;
-
-  body.innerHTML = freeTechs.map(([name]) =>
-    `<div class="free-tech-item">
-      <span class="ft-icon">&#128119;</span>
-      <span class="ft-name">${name}</span>
-    </div>`
-  ).join('');
-}
-
-// ─── Toggle colapso del panel flotante ────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  document.addEventListener('click', e => {
-    const hdr = e.target.closest('#free-techs-header');
-    if(!hdr) return;
-    const body = document.getElementById('free-techs-body');
-    const arrow = document.getElementById('free-techs-arrow');
-    if(!body||!arrow) return;
-    body.classList.toggle('collapsed');
-    arrow.innerHTML = body.classList.contains('collapsed') ? '&#9660;' : '&#9650;';
-  });
-});
-
-function renderTechnicianSummary(){
-  const sc=document.getElementById('tech-summary-content');if(!sc)return;
-  const ts={},noTech='Sin técnico';
-  allRecords.forEach(r=>{const t=r.Tecnico||noTech;if(!ts[t])ts[t]=0;ts[t]++;});
-  let html='<table class="table table-sm table-borderless mb-0"><thead><tr><th>Técnico</th><th>Total</th></tr></thead><tbody>';
-  Object.keys(ts).sort((a,b)=>a===noTech?1:b===noTech?-1:a.localeCompare(b)).forEach(t=>{
-    const isSug=window.currentSuggestions&&window.currentSuggestions.includes(t);
-    html+=`<tr><td class="text-nowrap ${isSug?'tech-suggested-highlight':''}">${t}</td><td><span class="badge bg-yellow text-dark">${ts[t]}</span></td></tr>`;
-  });
-  html+='</tbody></table>';
-  sc.innerHTML=html;
-  updateFreeTechsPanel();
-}
-
-function searchByCodigo(){
-  const raw=document.getElementById('codigo-search').value.trim();
-  const msgEl=document.getElementById('codigo-search-msg');msgEl.textContent='';
-  if(!raw){msgEl.textContent='Ingrese un Código.';return;}
-  const num=Number(raw);
-  const record=allRecords.find(r=>{const c=r.Codigo,cn=Number(c);return !isNaN(num)&&!isNaN(cn)?cn===num:String(c)===raw;});
-  if(!record){msgEl.textContent=`Código "${raw}" no encontrado.`;return;}
-  map.setView([record.latitud_Y,record.longitud_X],16);
-  const popupHTML=`<div><strong>Código:</strong> ${record.Codigo}<br><strong>Cliente:</strong> ${record.Cliente}<br><strong>Dirección:</strong> ${record.Direccion}<br><strong>Estado:</strong> ${record.Estado}</div>`;
-  L.popup({offset:[0,-15]}).setLatLng([record.latitud_Y,record.longitud_X]).setContent(popupHTML).openOn(map);
-  // Resaltar el pin encontrado
-  const match=markers.find(m=>m.record&&(m.record.id===record.id||m.record.Codigo===record.Codigo));
-  if(match&&match.getElement){
-    const el=match.getElement();
-    if(el){el.classList.add('glow');setTimeout(()=>el.classList.remove('glow'),3000);}
-  }
-  showRecordDetails(record);
-}
-
-function downloadRecordsAsExcel(){
-    const columnOrder = [
-        "id", "Tramo", "Codigo", "Estado", "Cliente", "Estado2", "Negocio",
-        "Tecnico", "Distrito", "Location", "Direccion", "latitud_Y", "longitud_X",
-        "Observaciones", "Agencia"
-    ];
-    const formattedData = allRecords.map(record => {
-        const newRecord = {};
-        columnOrder.forEach(col => {
-            newRecord[col] = record[col] !== undefined && record[col] !== null ? record[col] : "";
-        });
-        return newRecord;
-    });
-    const ws = XLSX.utils.json_to_sheet(formattedData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Registros');
-    XLSX.writeFile(wb, 'registros_asignados.xlsx');
-}
-
-function downloadRecordsAsCSV(){
-    const columnOrder = [
-        "id", "Tramo", "Codigo", "Estado", "Cliente", "Estado2", "Negocio",
-        "Tecnico", "Distrito", "Location", "Direccion", "latitud_Y", "longitud_X",
-        "Observaciones", "Agencia"
-    ];
-    const formattedData = allRecords.map(record => {
-        const newRecord = {};
-        columnOrder.forEach(col => {
-            newRecord[col] = record[col] !== undefined && record[col] !== null ? record[col] : "";
-        });
-        return newRecord;
-    });
-    const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(formattedData));
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = 'registros_asignados.csv';
-    a.click();
-}
-
-function getTechnicianSuggestions(record){
-  if(record.Tecnico)return[];
-  const wl={},byD={};
-  allRecords.forEach(r=>{if(!r.Tecnico)return;wl[r.Tecnico]=(wl[r.Tecnico]||0)+1;if(r.Distrito){if(!byD[r.Distrito])byD[r.Distrito]=new Set();byD[r.Distrito].add(r.Tecnico);}});
-  const inD=record.Distrito&&byD[record.Distrito]?Array.from(byD[record.Distrito]):[];
-  return Object.keys(wl).map(t=>({t,score:(inD.includes(t)?100:0)-(wl[t]*5)})).sort((a,b)=>b.score-a.score).slice(0,5).map(x=>x.t);
-}
-
+// ─── Countdown ────────────────────────────────────────────────────────────────
 function startCountdownTimer(){if(countdownInterval)clearInterval(countdownInterval);countdownInterval=setInterval(updateCountdowns,1000);}
-function updateCountdowns(){
-  const now=new Date();
-  const hour=now.getHours(),min=now.getMinutes(),sec=now.getSeconds();
-  const nowSegs=hour*3600+min*60+sec;
-  let soon=0;
 
+function updateCountdowns(){
+  const now=new Date(),nowSegs=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
+  let soon=0;
   markers.forEach(marker=>{
-    if(!marker.record||!marker.record.Estado) return;
+    if(!marker.record||!marker.record.Estado)return;
     const estado=marker.record.Estado;
     const match=estado.match(/(8\/12|12\/16|16\/20)/);
-    if(!match||!/(pendiente|coord)/i.test(estado)) return;
-    const iv=getIntervalFromRange(match[1]);
-    if(!iv) return;
-
-    const venceSegs  = iv.end*3600;
-    const alertaSegs = venceSegs-3600;
-    const restaSegs  = venceSegs-nowSegs;
-
-    let el=null;
-    try{el=marker.getElement();}catch(e){}
-    if(!el) return;
-
-    // Buscar o crear overlay dentro del elemento del marker
+    if(!match||!/(pendiente|coord)/i.test(estado))return;
+    const iv=getInterval(match[1]); if(!iv)return;
+    const venceSegs=iv.end*3600,alertaSegs=venceSegs-3600,restaSegs=venceSegs-nowSegs;
+    let el=null; try{el=marker.getElement();}catch(e){}if(!el)return;
     let ov=el.querySelector('.countdown-overlay');
-
     if(nowSegs>=venceSegs){
       if(!ov){ov=document.createElement('div');ov.className='countdown-overlay';el.insertBefore(ov,el.firstChild);}
       ov.style.cssText='display:block!important;background:rgba(200,0,0,0.92)!important;color:white!important;font-weight:bold!important;position:absolute!important;top:-18px!important;left:0!important;min-width:55px!important;white-space:nowrap!important;font-size:10px!important;padding:2px 5px!important;border-radius:3px!important;z-index:9999!important;pointer-events:none!important;overflow:visible!important;';
-      ov.textContent='VENCIDO';
-      return;
+      ov.textContent='VENCIDO'; return;
     }
-
     if(nowSegs>=alertaSegs&&nowSegs<venceSegs){
-      const mm=Math.floor(restaSegs/60);
-      const ss=Math.floor(restaSegs%60);
+      const mm=Math.floor(restaSegs/60),ss=Math.floor(restaSegs%60);
       if(!ov){ov=document.createElement('div');ov.className='countdown-overlay';el.insertBefore(ov,el.firstChild);}
       ov.style.cssText='display:block!important;background:rgba(200,0,0,0.85)!important;color:white!important;font-weight:bold!important;position:absolute!important;top:-18px!important;left:0!important;min-width:45px!important;white-space:nowrap!important;font-size:10px!important;padding:2px 5px!important;border-radius:3px!important;z-index:9999!important;pointer-events:none!important;overflow:visible!important;';
       ov.textContent=`⚠ ${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'00')}`;
       soon++;
-    } else {
-      if(ov) ov.style.display='none';
-    }
+    } else {if(ov)ov.style.display='none';}
   });
-
   const go=document.getElementById('global-timer-overlay');
-  if(go){
-    go.style.display=soon>0?'block':'none';
-    if(soon>0) go.textContent=`⚠ ${soon} pendiente${soon!==1?'s':''} por vencer`;
-  }
-}
-function getIntervalFromRange(tr){
-  if(!tr) return null;
-  const clean=tr.trim();
-  return [{name:'8/12',start:8,end:12},{name:'12/16',start:12,end:16},{name:'16/20',start:16,end:20}].find(i=>i.name===clean)||null;
-}
-function onCountdownEnd(record,marker){
-  const el=marker.getElement();if(!el)return;
-  el.classList.add('countdown-expired');
-  // Sin popup que interrumpa — solo overlay rojo fijo
-  let ov=el.querySelector('.countdown-overlay');
-  if(!ov){ov=document.createElement('div');ov.className='countdown-overlay';el.appendChild(ov);}
-  ov.style.display='block';
-  ov.style.background='rgba(200,0,0,0.90)';
-  ov.style.color='white';
-  ov.style.fontWeight='bold';
-  ov.textContent='ORDEN VENCIDA';
-}
-function shouldApplyFormatting(estado){
-  if(!estado) return false;
-  if(/8\/12/.test(estado)&&/(pendiente|coord)/i.test(estado))  return localStorage.getItem('format-8-12')==='true';
-  if(/12\/16/.test(estado)&&/(pendiente|coord)/i.test(estado)) return localStorage.getItem('format-12-16')==='true';
-  if(/16\/20/.test(estado)&&/(pendiente|coord)/i.test(estado)) return localStorage.getItem('format-16-20')==='true';
-  return false;
-}
-function updateFormatToggleLabel(toggle){const lbl=document.querySelector(`label[for="${toggle.id}"]`);if(lbl)lbl.classList.toggle('bg-yellow',toggle.checked);}
-
-const MAP_STYLES=[
-  {name:'CartoDB Positron',url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',attribution:'&copy; CartoDB'},
-  {name:'Light Mode',url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',attribution:'&copy; OpenStreetMap'},
-  {name:'Esri WorldImagery',url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',attribution:'Tiles &copy; Esri'},
-  {name:'Google Maps',url:'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',attribution:'&copy; Google Maps'},
-  {name:'Google Hybrid',url:'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',attribution:'&copy; Google Maps'}
-];
-let currentTileLayer;
-function applyMapStyle(name){
-  const s=MAP_STYLES.find(x=>x.name===name)||MAP_STYLES[0];
-  if(currentTileLayer)map.removeLayer(currentTileLayer);
-  currentTileLayer=L.tileLayer(s.url,{attribution:s.attribution}).addTo(map);
-  const lbl=document.getElementById('current-style-label');if(lbl)lbl.textContent=s.name;
-  localStorage.setItem('selectedStyle',s.name);highlightSidebarStyle(s.name);
-}
-function setupStyleLegend(){
-  const menu=document.querySelector('#style-legend .dropdown-menu');if(!menu)return;menu.innerHTML='';
-  MAP_STYLES.forEach(s=>{
-    const li=document.createElement('li');li.innerHTML=`<a class="dropdown-item" href="#">${s.name}</a>`;
-    li.querySelector('a').addEventListener('click',e=>{e.preventDefault();applyMapStyle(s.name);});
-    menu.appendChild(li);
-  });
-  buildSidebarStyleLegend();
-}
-function buildSidebarStyleLegend(){
-  const ul=document.getElementById('sidebar-style-legend');if(!ul)return;ul.innerHTML='';
-  MAP_STYLES.forEach(s=>{
-    const li=document.createElement('li');li.textContent=s.name;li.dataset.style=s.name;
-    li.addEventListener('click',()=>{applyMapStyle(s.name);highlightSidebarStyle(s.name);});
-    ul.appendChild(li);
-  });
-  highlightSidebarStyle(localStorage.getItem('selectedStyle')||MAP_STYLES[0].name);
-}
-function highlightSidebarStyle(name){document.querySelectorAll('#sidebar-style-legend li').forEach(li=>li.classList.toggle('active',li.dataset.style===name));}
-
-// ─── Context menu ─────────────────────────────────────────────────────────────
-function showContextMenu(x,y,record){
-  const cm=document.getElementById('context-menu');if(!cm)return;
-  cm.style.left=`${x}px`;cm.style.top=`${y}px`;
-  // technicianList ya viene fresco de Supabase (nunca de localStorage)
-  technicianList.sort((a,b)=>a.localeCompare(b));
-  let html=`<div class="context-menu-header">Asignar Técnico</div>
-    <div class="context-menu-item" data-tech="">Sin técnico</div>
-    <div class="context-menu-separator"></div>`;
-  technicianList.forEach(t=>{
-    html+=`<div class="context-menu-item${t===record.Tecnico?' bg-light fw-bold':''}" data-tech="${t}">${t}</div>`;
-  });
-  html+=`<div class="context-menu-separator"></div>
-    <div class="context-menu-item text-danger" data-action="delete-tech">Eliminar Técnico de la lista</div>
-    <div class="context-menu-separator"></div>
-    <input type="text" class="form-control form-control-sm context-menu-input" id="new-tech-input" placeholder="Nuevo técnico...">
-    <button class="btn btn-sm btn-primary context-menu-add-btn" id="add-tech-btn">Agregar Técnico</button>`;
-  cm.innerHTML=html;cm.style.display='block';
-
-  cm.querySelectorAll('.context-menu-item').forEach(item=>{
-    item.addEventListener('click',async function(){
-      if(this.getAttribute('data-action')==='delete-tech'){
-        const cur=record.Tecnico;
-        if(!cur||!confirm(`¿Eliminar al técnico "${cur}" de la lista?`)){cm.style.display='none';return;}
-        technicianList=technicianList.filter(t=>t!==cur);
-        await sbSaveGlobal('technician_list',technicianList);
-        // localStorage se actualiza solo via listener realtime
-        await updateRecordTechnician(record.id,'');
-        showContextMenu(x,y,{...record,Tecnico:''});
-        return;
-      }
-      await updateRecordTechnician(record.id,this.getAttribute('data-tech'));
-      showRecordDetails(record);cm.style.display='none';
-    });
-  });
-
-  async function addNewTech(){
-    const inp=document.getElementById('new-tech-input');if(!inp||!inp.value.trim())return;
-    const nt=inp.value.trim();
-    if(!technicianList.includes(nt)){
-      technicianList.push(nt);
-      technicianList.sort((a,b)=>a.localeCompare(b));
-      await sbSaveGlobal('technician_list',technicianList);
-      // localStorage se actualiza solo via listener realtime
-    }
-    await updateRecordTechnician(record.id,nt);
-    showRecordDetails(record);cm.style.display='none';
-  }
-  document.getElementById('add-tech-btn')?.addEventListener('click',addNewTech);
-  document.getElementById('new-tech-input')?.addEventListener('keypress',e=>{if(e.key==='Enter')addNewTech();});
+  if(go){go.style.display=soon>0?'block':'none';if(soon>0)go.textContent=`⚠ ${soon} pendiente${soon!==1?'s':''} por vencer`;}
 }
 
-if(localStorage.getItem('showTooltips')===null)localStorage.setItem('showTooltips','true');
+function getInterval(tr){
+  if(!tr)return null;
+  return [{name:'8/12',start:8,end:12},{name:'12/16',start:12,end:16},{name:'16/20',start:16,end:20}].find(i=>i.name===tr.trim())||null;
+}
 
-// ─── Zone Drawing Tool ────────────────────────────────────────────────────────
-(function(){
-  // ── Core state ────────────────────────────────────────────────────────────────
-  let zones = [];
-  let drawing = false;
-  let currentPoints = [];
-  let previewLayer = null;
-  let clickHandler = null;
-  let selectedColor = '#e74c3c';
-  let opacityPct = 25;
-  let zonesVisible = true;
-  const STORAGE_KEY = 'drawnZones_v1';
-  const SB_TABLE    = 'map_zones';   // Supabase table name
-  let _zonesChannel = null;
-  let _syncTimeout  = null;
-
-  // ── Edit-mode state ───────────────────────────────────────────────────────────
-  let editingZone = null;
-  let editHandles = [];
-  let editMidHandles = [];
-  let editPolyPreview = null;
-
-  // ── Supabase helpers ──────────────────────────────────────────────────────────
-  function setSyncStatus(msg, color){
-    const el = document.getElementById('zone-sync-status');
-    if(el){ el.textContent = msg; el.style.color = color || '#666'; }
-  }
-  function setSyncIcon(spin){
-    const ic = document.getElementById('zone-sync-icon');
-    if(!ic) return;
-    ic.className = spin ? 'fas fa-spinner fa-spin' : 'fas fa-cloud-upload-alt';
-  }
-
-  async function pushToSupabase(){
-    setSyncIcon(true); setSyncStatus('Guardando en la nube…', '#0d6efd');
-    try {
-      const payload = zones.map(z => ({id:z.id,name:z.name,color:z.color,opacity:z.opacity,latlngs:z.latlngs}));
-      const { error } = await sb.from(SB_TABLE).upsert({
-        id: 'global', data: payload, updated_at: new Date().toISOString()
-      });
-      if(error) throw error;
-      setSyncStatus('✔ Sincronizado ' + new Date().toLocaleTimeString(), '#1a8a1a');
-    } catch(e){
-      console.error('Zone push error:', e);
-      const msg = e.message || '';
-      if(msg.includes('does not exist') || msg.includes('relation')){
-        setSyncStatus('⚠ Tabla "map_zones" no existe en Supabase. Créala primero.', '#c00');
-      } else {
-        setSyncStatus('⚠ Error al sincronizar: ' + msg.slice(0,60), '#c00');
-      }
-    }
-    setSyncIcon(false);
-  }
-
-  async function pullFromSupabase(){
-    setSyncIcon(true); setSyncStatus('Cargando desde la nube…', '#666');
-    try {
-      const { data, error } = await sb.from(SB_TABLE).select('data').eq('id','global').single();
-      if(error) throw error;
-      if(data && data.data && Array.isArray(data.data)){
-        // Remove existing layers
-        zones.forEach(z => { if(z.layer) map.removeLayer(z.layer); });
-        zones = data.data.map(z => ({...z, layer:null}));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.data));
-        renderAllZones();
-        setSyncStatus('✔ Cargado ' + new Date().toLocaleTimeString(), '#1a8a1a');
-      } else {
-        setSyncStatus('Sin zonas en la nube aún.', '#666');
-      }
-    } catch(e){
-      console.error('Zone pull error:', e);
-      const msg = e.message || '';
-      if(msg.includes('does not exist') || msg.includes('relation')){
-        setSyncStatus('⚠ Tabla "map_zones" no existe. Créala en Supabase.', '#c00');
-      } else if(msg.includes('JSON object requested') || msg.includes('0 rows')){
-        setSyncStatus('Sin datos en la nube todavía.', '#888');
-      } else {
-        setSyncStatus('⚠ ' + msg.slice(0,70), '#c00');
-      }
-    }
-    setSyncIcon(false);
-  }
-
-  // Debounced auto-push after any change
-  function scheduleSync(){
-    if(_syncTimeout) clearTimeout(_syncTimeout);
-    _syncTimeout = setTimeout(pushToSupabase, 1500);
-  }
-
-  function subscribeZonesRealtime(){
-    if(_zonesChannel){ try{ sb.removeChannel(_zonesChannel); }catch(e){} }
-    _zonesChannel = sb.channel('map_zones_rt')
-      .on('postgres_changes', {event:'*', schema:'public', table: SB_TABLE, filter:'id=eq.global'}, payload => {
-        const remote = payload.new && payload.new.data;
-        if(!remote || !Array.isArray(remote)) return;
-        // Apply remote changes without triggering another push
-        zones.forEach(z => { if(z.layer) map.removeLayer(z.layer); });
-        zones = remote.map(z => ({...z, layer:null}));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
-        renderAllZones();
-        setSyncStatus('🔄 Actualizado en tiempo real ' + new Date().toLocaleTimeString(), '#0d6efd');
-      })
-      .subscribe(status => {
-        if(status === 'SUBSCRIBED') setSyncStatus('☁ En línea – tiempo real activo', '#1a8a1a');
-        if(status === 'CLOSED' || status === 'CHANNEL_ERROR') setSyncStatus('⚠ Sin conexión realtime', '#c00');
-      });
-  }
-
-  // ── Persist local ─────────────────────────────────────────────────────────────
-  function loadZonesLocal(){
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if(raw) JSON.parse(raw).forEach(z => { z.layer = null; zones.push(z); });
-    } catch(e){}
-  }
-  function saveLocal(){
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(
-        zones.map(z=>({id:z.id,name:z.name,color:z.color,opacity:z.opacity,latlngs:z.latlngs}))
-      ));
-    } catch(e){}
-  }
-
-  // ── Map layer helpers ─────────────────────────────────────────────────────────
-  function addZoneToMap(z){
-    if(!zonesVisible) return;
-    const poly = L.polygon(z.latlngs, {
-      color:z.color, weight:2.5, fillColor:z.color,
-      fillOpacity:z.opacity/100, opacity:0.85
-    }).addTo(map);
-    poly.bindTooltip(z.name, {permanent:true, direction:'center', className:'zone-label-tooltip'});
-    z.layer = poly;
-  }
-  function refreshZoneLayer(z){
-    if(z.layer){ map.removeLayer(z.layer); z.layer = null; }
-    if(z.latlngs.length >= 3) addZoneToMap(z);
-  }
-  function renderAllZones(){
-    zones.forEach(z => { if(!z.layer && z.latlngs && z.latlngs.length >= 3) addZoneToMap(z); });
-    renderZoneList();
-  }
-
-  // ── Visibility toggle ─────────────────────────────────────────────────────────
-  function setZonesVisible(v){
-    zonesVisible = v;
-    const icon  = document.getElementById('zone-eye-icon');
-    const label = document.getElementById('zone-vis-label');
-    const btn   = document.getElementById('zone-toggle-visibility');
-    if(zonesVisible){
-      zones.forEach(z => { if(!z.layer && z.latlngs && z.latlngs.length>=3) addZoneToMap(z); });
-      if(icon)  icon.className  = 'fas fa-eye';
-      if(label) label.textContent = 'Visible';
-      if(btn)   btn.style.background = '#fff';
-    } else {
-      zones.forEach(z => { if(z.layer){ map.removeLayer(z.layer); z.layer=null; } });
-      if(icon)  icon.className  = 'fas fa-eye-slash';
-      if(label) label.textContent = 'Oculto';
-      if(btn)   btn.style.background = '#f0f0f0';
-    }
-  }
-
-  // ── Zone list ─────────────────────────────────────────────────────────────────
-  function renderZoneList(){
-    const container = document.getElementById('zone-list');
-    if(!container) return;
-    if(!zones.length){
-      container.innerHTML = '<div class="text-muted" style="font-size:11px;padding:4px;">Sin zonas aún</div>';
-      return;
-    }
-    container.innerHTML = zones.map(z => `
-      <div class="zone-list-item" data-id="${z.id}">
-        <div class="zli-color" style="background:${z.color};border-radius:3px;width:14px;height:14px;flex-shrink:0;"></div>
-        <span class="zli-name" title="${z.name}" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${z.name}</span>
-        <span class="zli-edit" data-edit="${z.id}" title="Editar zona" style="cursor:pointer;font-size:13px;padding:0 3px;color:#0d6efd;">✏️</span>
-        <span class="zli-del"  data-del="${z.id}"  title="Eliminar zona" style="cursor:pointer;font-size:14px;padding:0 3px;color:#dc3545;">✕</span>
-      </div>`).join('');
-
-    container.querySelectorAll('.zone-list-item').forEach(item => {
-      const z = zones.find(z => z.id === item.dataset.id);
-      if(!z || !z.layer) return;
-      item.addEventListener('mouseenter', () => {
-        z.layer.setStyle({weight:5, fillOpacity:Math.min(z.opacity/100+0.15,0.85)});
-        map.fitBounds(z.layer.getBounds(), {padding:[30,30]});
-      });
-      item.addEventListener('mouseleave', () => {
-        if(editingZone && editingZone.id===z.id) return;
-        z.layer.setStyle({weight:2.5, fillOpacity:z.opacity/100});
-      });
-    });
-    container.querySelectorAll('.zli-edit').forEach(btn => {
-      btn.addEventListener('click', e => { e.stopPropagation(); startEdit(btn.dataset.edit); });
-    });
-    container.querySelectorAll('.zli-del').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        const idx = zones.findIndex(z=>z.id===btn.dataset.del);
-        if(idx===-1) return;
-        if(editingZone && editingZone.id===btn.dataset.del) stopEdit(false);
-        if(zones[idx].layer) map.removeLayer(zones[idx].layer);
-        zones.splice(idx,1);
-        saveLocal(); scheduleSync(); renderZoneList();
-      });
-    });
-  }
-
-  // ── EDIT MODE ─────────────────────────────────────────────────────────────────
-  function startEdit(id){
-    if(drawing) cancelDrawing();
-    if(editingZone) stopEdit(false);
-    const z = zones.find(z=>z.id===id);
-    if(!z) return;
-    editingZone = z;
-    if(z.layer) z.layer.setStyle({opacity:0.3, fillOpacity:0.08});
-    showEditUI(z);
-    buildEditHandles(z);
-    if(z.layer) map.fitBounds(z.layer.getBounds(), {padding:[40,40]});
-  }
-
-  function showEditUI(z){
-    const panel = document.getElementById('zone-draw-panel');
-    panel.classList.add('open');
-    document.getElementById('zone-draw-btn').classList.add('active');
-    document.getElementById('zone-edit-ui')?.remove();
-    const ui = document.createElement('div');
-    ui.id = 'zone-edit-ui';
-    ui.innerHTML = `
-      <hr style="margin:8px 0;">
-      <div style="font-size:12px;font-weight:bold;color:#0d6efd;margin-bottom:6px;">✏️ Editando: ${z.name}</div>
-      <div style="font-size:11px;color:#666;margin-bottom:4px;">Nombre:</div>
-      <input id="edit-zone-name" class="form-control form-control-sm mb-2" value="${z.name}">
-      <div style="font-size:11px;color:#666;margin-bottom:3px;">Color:</div>
-      <div id="edit-color-swatches" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">
-        ${['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6','#1abc9c','#e91e63','#607d8b'].map(c=>
-          `<div class="edit-swatch" data-color="${c}" style="width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===z.color?'#333':'transparent'};transition:border-color .15s;"></div>`
-        ).join('')}
-      </div>
-      <div style="font-size:11px;color:#666;margin-bottom:3px;">Opacidad:</div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <input type="range" id="edit-zone-opacity" min="5" max="60" value="${z.opacity}" style="flex:1;">
-        <span id="edit-opacity-val" style="font-size:12px;width:28px;">${z.opacity}%</span>
-      </div>
-      <div style="font-size:11px;color:#555;background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:6px;margin-bottom:8px;">
-        🖱️ <b>Arrastra</b> puntos azules para mover vértices.<br>
-        ➕ Clic en punto <b>gris</b> para añadir vértice.<br>
-        🗑️ Clic derecho en punto azul para eliminarlo.
-      </div>
-      <button id="edit-save-btn"   class="btn btn-success btn-sm w-100 mb-1">✔ Guardar cambios</button>
-      <button id="edit-cancel-btn" class="btn btn-outline-secondary btn-sm w-100">✕ Cancelar edición</button>`;
-    panel.appendChild(ui);
-
-    ui.querySelectorAll('.edit-swatch').forEach(sw => {
-      sw.addEventListener('click', () => {
-        ui.querySelectorAll('.edit-swatch').forEach(s => s.style.borderColor = s.dataset.color===sw.dataset.color?'#333':'transparent');
-        editingZone._editColor = sw.dataset.color;
-        refreshEditPreview();
-      });
-    });
-    editingZone._editColor = z.color;
-    ui.querySelector('#edit-zone-opacity').addEventListener('input', function(){
-      ui.querySelector('#edit-opacity-val').textContent = this.value+'%';
-      editingZone._editOpacity = parseInt(this.value);
-      refreshEditPreview();
-    });
-    editingZone._editOpacity = z.opacity;
-    document.getElementById('edit-save-btn').addEventListener('click', () => stopEdit(true));
-    document.getElementById('edit-cancel-btn').addEventListener('click', () => stopEdit(false));
-  }
-
-  function buildEditHandles(z){
-    clearEditHandles();
-    const lls = z.latlngs.map(ll => Array.isArray(ll)?L.latLng(ll[0],ll[1]):ll);
-    editingZone._editLatlngs = lls.slice();
-    editPolyPreview = L.polygon(editingZone._editLatlngs, {
-      color:z._editColor||z.color, weight:2.5, fillColor:z._editColor||z.color,
-      fillOpacity:(z._editOpacity||z.opacity)/100, opacity:0.9, dashArray:'6,3'
-    }).addTo(map);
-    rebuildHandles();
-  }
-
-  function rebuildHandles(){
-    editHandles.forEach(h=>map.removeLayer(h));
-    editMidHandles.forEach(h=>map.removeLayer(h));
-    editHandles=[]; editMidHandles=[];
-    const lls = editingZone._editLatlngs;
-    const color = editingZone._editColor||editingZone.color;
-    lls.forEach((ll,i)=>{
-      const h = L.circleMarker(ll,{radius:7,color:'#fff',weight:2,fillColor:color,fillOpacity:1,zIndexOffset:500}).addTo(map);
-      h._zoneIdx=i;
-      h.on('mousedown',function(e){
-        L.DomEvent.stopPropagation(e);
-        map.dragging.disable();
-        const onMove=function(ev){
-          const latlng=map.mouseEventToLatLng(ev.originalEvent);
-          editingZone._editLatlngs[h._zoneIdx]=latlng;
-          h.setLatLng(latlng);
-          refreshEditPreview(); rebuildMidHandles();
-        };
-        const onUp=function(){
-          map.dragging.enable();
-          map.off('mousemove',onMove); map.off('mouseup',onUp);
-          rebuildHandles();
-        };
-        map.on('mousemove',onMove); map.on('mouseup',onUp);
-      });
-      h.on('contextmenu',function(e){
-        L.DomEvent.stopPropagation(e);
-        if(editingZone._editLatlngs.length<=3){alert('Mínimo 3 puntos.');return;}
-        editingZone._editLatlngs.splice(h._zoneIdx,1);
-        refreshEditPreview(); rebuildHandles();
-      });
-      editHandles.push(h);
-    });
-    rebuildMidHandles();
-  }
-
-  function rebuildMidHandles(){
-    editMidHandles.forEach(h=>map.removeLayer(h)); editMidHandles=[];
-    const lls=editingZone._editLatlngs;
-    lls.forEach((ll,i)=>{
-      const next=lls[(i+1)%lls.length];
-      const mid=L.latLng((ll.lat+next.lat)/2,(ll.lng+next.lng)/2);
-      const mh=L.circleMarker(mid,{radius:5,color:'#aaa',weight:1.5,fillColor:'#ddd',fillOpacity:0.85,zIndexOffset:400}).addTo(map);
-      mh._afterIdx=i;
-      mh.on('click',function(e){
-        L.DomEvent.stopPropagation(e);
-        editingZone._editLatlngs.splice(mh._afterIdx+1,0,mid);
-        refreshEditPreview(); rebuildHandles();
-      });
-      editMidHandles.push(mh);
-    });
-  }
-
-  function refreshEditPreview(){
-    if(!editPolyPreview) return;
-    const color=editingZone._editColor||editingZone.color;
-    const opacity=(editingZone._editOpacity||editingZone.opacity)/100;
-    editPolyPreview.setLatLngs(editingZone._editLatlngs);
-    editPolyPreview.setStyle({color,fillColor:color,fillOpacity:opacity});
-  }
-
-  function clearEditHandles(){
-    editHandles.forEach(h=>map.removeLayer(h));
-    editMidHandles.forEach(h=>map.removeLayer(h));
-    editHandles=[]; editMidHandles=[];
-    if(editPolyPreview){map.removeLayer(editPolyPreview);editPolyPreview=null;}
-  }
-
-  function stopEdit(save){
-    if(!editingZone) return;
-    const z=editingZone;
-    if(save){
-      z.latlngs  = z._editLatlngs.map(ll=>[ll.lat,ll.lng]);
-      z.color    = z._editColor   || z.color;
-      z.opacity  = z._editOpacity || z.opacity;
-      z.name     = document.getElementById('edit-zone-name')?.value.trim() || z.name;
-      refreshZoneLayer(z);
-      saveLocal(); scheduleSync();
-    } else {
-      if(z.layer) z.layer.setStyle({opacity:0.85, fillOpacity:z.opacity/100});
-    }
-    clearEditHandles();
-    delete z._editLatlngs; delete z._editColor; delete z._editOpacity;
-    editingZone=null;
-    map.dragging.enable();
-    document.getElementById('zone-edit-ui')?.remove();
-    renderZoneList();
-  }
-
-  // ── DRAW MODE ─────────────────────────────────────────────────────────────────
-  function startDrawing(){
-    if(editingZone) stopEdit(false);
-    drawing=true; currentPoints=[];
-    map.getContainer().style.cursor='crosshair';
-    document.getElementById('zone-start-draw').style.display='none';
-    document.getElementById('zone-finish-draw').style.display='';
-    document.getElementById('zone-cancel-draw').style.display='';
-    document.getElementById('zone-pts-count').textContent='0';
-    if(previewLayer){map.removeLayer(previewLayer);previewLayer=null;}
-    clickHandler=function(e){
-      if(!drawing) return;
-      currentPoints.push(e.latlng);
-      updatePreview();
-      document.getElementById('zone-pts-count').textContent=currentPoints.length;
-    };
-    map.on('click',clickHandler);
-  }
-
-  function updatePreview(){
-    if(previewLayer) map.removeLayer(previewLayer);
-    if(currentPoints.length<2) return;
-    previewLayer=L.polyline(currentPoints,{color:selectedColor,weight:2.5,dashArray:'6,4',opacity:0.9}).addTo(map);
-  }
-
-  function finishDrawing(){
-    if(currentPoints.length<3){alert('Necesitas al menos 3 puntos.');return;}
-    const name=(document.getElementById('zone-name-input').value.trim())||`Zona ${zones.length+1}`;
-    const nz={id:'z_'+Date.now(),name,color:selectedColor,opacity:opacityPct,
-              latlngs:currentPoints.map(p=>[p.lat,p.lng]),layer:null};
-    zones.push(nz);
-    addZoneToMap(nz);
-    saveLocal(); scheduleSync(); renderZoneList();
-    cancelDrawing();
-    document.getElementById('zone-name-input').value='';
-  }
-
-  function cancelDrawing(){
-    drawing=false; currentPoints=[];
-    if(clickHandler){map.off('click',clickHandler);clickHandler=null;}
-    if(previewLayer){map.removeLayer(previewLayer);previewLayer=null;}
-    map.getContainer().style.cursor='';
-    document.getElementById('zone-start-draw').style.display='';
-    document.getElementById('zone-finish-draw').style.display='none';
-    document.getElementById('zone-cancel-draw').style.display='none';
-    document.getElementById('zone-pts-count').textContent='0';
-  }
-
-  // ── Init ──────────────────────────────────────────────────────────────────────
-  function initZoneTool(){
-    // Panel toggle
-    document.getElementById('zone-draw-btn')?.addEventListener('click',()=>{
-      document.getElementById('zone-draw-btn').classList.toggle('active');
-      document.getElementById('zone-draw-panel').classList.toggle('open');
-    });
-    // Color swatches
-    document.querySelectorAll('.zone-swatch').forEach(sw=>{
-      sw.addEventListener('click',()=>{
-        document.querySelectorAll('.zone-swatch').forEach(s=>s.classList.remove('selected'));
-        sw.classList.add('selected'); selectedColor=sw.dataset.color;
-      });
-    });
-    // Opacity
-    const opSlider=document.getElementById('zone-opacity');
-    const opVal=document.getElementById('zone-opacity-val');
-    if(opSlider) opSlider.addEventListener('input',()=>{
-      opacityPct=parseInt(opSlider.value); opVal.textContent=opacityPct+'%';
-    });
-    // Draw buttons
-    document.getElementById('zone-start-draw')?.addEventListener('click',startDrawing);
-    document.getElementById('zone-finish-draw')?.addEventListener('click',finishDrawing);
-    document.getElementById('zone-cancel-draw')?.addEventListener('click',cancelDrawing);
-
-    // Visibility toggle
-    document.getElementById('zone-toggle-visibility')?.addEventListener('click',()=>setZonesVisible(!zonesVisible));
-
-    // Sync button (manual force-push + pull)
-    document.getElementById('zone-sync-btn')?.addEventListener('click', async ()=>{
-      await pullFromSupabase();
-    });
-
-    // dblclick to finish drawing
-    map.on('dblclick',function(e){
-      if(!drawing) return;
-      e.originalEvent.preventDefault(); e.originalEvent.stopPropagation();
-      if(currentPoints.length>=3) finishDrawing();
-    });
-
-    // ESC
-    document.addEventListener('keydown',function(e){
-      if(e.key==='Escape'){
-        if(drawing) cancelDrawing();
-        if(editingZone) stopEdit(false);
-      }
-    });
-
-    // Load local first (instant), then pull from Supabase (authoritative)
-    loadZonesLocal();
-    renderAllZones();
-    setSyncStatus('Cargando desde la nube…','#666');
-
-    // Pull from Supabase after a small delay (let map & sb init)
-    setTimeout(async ()=>{
-      await pullFromSupabase();
-      subscribeZonesRealtime();
-    }, 800);
-  }
-
-  document.addEventListener('DOMContentLoaded',()=>{ setTimeout(initZoneTool,350); });
-
-  // Styles
-  const style=document.createElement('style');
-  style.textContent=`
-    .zone-label-tooltip{background:transparent!important;border:none!important;box-shadow:none!important;
-      color:#222;font-weight:bold;font-size:12px;pointer-events:none;
-      text-shadow:1px 1px 3px #fff,-1px -1px 3px #fff,1px -1px 3px #fff,-1px 1px 3px #fff;}
-    .zone-label-tooltip::before{display:none;}`;
-  document.head.appendChild(style);
-})();
+function shouldFormat(estado){
+  if(!estado)return false;
+  return /(8\/12|12\/16|16\/20)/.test(estado)&&/(pendiente|coord)/i.test(estado);
+}
 </script>
 </body>
 </html>
