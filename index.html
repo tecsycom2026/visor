@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tecsycom – Visor</title>
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1865/1865269.png" type="image/x-icon">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    html,body{height:100%;margin:0;padding:0;overflow:hidden;font-family:sans-serif;}
+    #map{height:100vh;width:100%;}
+    #top-bar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1500;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.95);padding:6px 14px;border-radius:30px;box-shadow:0 2px 8px rgba(0,0,0,0.2);max-width:90vw;}
+    #top-bar h6{margin:0;font-size:13px;font-weight:bold;white-space:nowrap;}
+    #zone-select{font-size:12px;border:1px solid #ccc;border-radius:6px;padding:4px 8px;cursor:pointer;touch-action:manipulation;}
+    #conn-badge{font-size:11px;background:#28a745;color:white;padding:2px 8px;border-radius:10px;white-space:nowrap;}
+    #realtime-indicator{position:absolute;top:55px;left:50%;transform:translateX(-50%);z-index:1500;background:rgba(0,150,0,.85);color:#fff;font-size:11px;padding:4px 12px;border-radius:20px;display:none;white-space:nowrap;pointer-events:none;transition:opacity .5s;}
+    #realtime-indicator.show{display:block;}
+    #realtime-indicator.fade-out{opacity:0;}
+    #global-timer-overlay{position:absolute;top:55px;right:10px;background:rgba(255,200,0,.9);color:black;padding:4px 10px;border-radius:5px;z-index:1500;display:none;font-size:12px;font-weight:bold;max-width:45vw;text-align:center;}
+    #last-upload{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);z-index:1500;background:rgba(255,255,255,0.85);font-size:11px;padding:3px 10px;border-radius:10px;color:#555;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;}
+    .estado-label{background:transparent;border:none;padding:2px 5px;font-size:11px;white-space:nowrap;margin-left:20px;text-align:center;pointer-events:none;box-shadow:none;}
+    .estado-pendiente{font-weight:bold;color:black!important;background-color:yellow!important;border:none!important;box-shadow:none!important;}
+    .custom-marker-container{display:flex;align-items:center;flex-direction:row;}
+    .custom-pin{width:30px;height:30px;border-radius:50%;background:var(--color,#4285F4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.2em;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+    @keyframes arrowBounce{0%{transform:translateX(-50%) translateY(0)}100%{transform:translateX(-50%) translateY(-4px)}}
+    @keyframes arrowBounceRight{0%{transform:translateY(-50%) translateX(0)}100%{transform:translateY(-50%) translateX(5px)}}
+    @keyframes winnerPop{0%{opacity:0;transform:translateX(-50%) translateY(10px) scale(.8);}15%{opacity:1;transform:translateX(-50%) translateY(0) scale(1.08);}25%{transform:translateX(-50%) translateY(0) scale(1);}78%{opacity:1;}100%{opacity:0;transform:translateX(-50%) translateY(-18px) scale(1);}}
+
+    /* ── Agregar punto manual ── */
+    #add-pin-toggle{position:absolute;bottom:70px;right:14px;z-index:1500;width:46px;height:46px;border-radius:50%;background:#4285F4;color:#fff;border:none;font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer;touch-action:manipulation;}
+    #add-pin-panel{display:none;position:absolute;bottom:124px;right:14px;z-index:1500;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.25);padding:12px;width:240px;font-size:12px;}
+    #add-pin-panel h6{margin:0 0 8px 0;font-size:12px;font-weight:bold;}
+    #add-pin-panel input{width:100%;box-sizing:border-box;font-size:12px;padding:6px;border:1px solid #ccc;border-radius:6px;margin-bottom:6px;}
+    #add-pin-panel .btn-row{display:flex;gap:6px;}
+    #add-pin-panel button.action{flex:1;border:none;padding:7px;border-radius:6px;font-size:12px;cursor:pointer;color:#fff;}
+    #pin-add-btn{background:#28a745;}
+    #pin-cancel-btn{background:#6c757d;}
+    #pin-error-msg{color:#dc3545;font-size:11px;margin-top:6px;display:none;}
+
+    @media(max-width:480px){
+      #add-pin-toggle{bottom:60px;right:10px;width:42px;height:42px;font-size:18px;}
+      #add-pin-panel{bottom:108px;right:10px;width:200px;}
+    }
+
+    /* ── Mobile ── */
+    @media(max-width:480px){
+      #top-bar{padding:5px 10px;gap:6px;}
+      #top-bar h6{font-size:11px;}
+      #zone-select{font-size:11px;padding:3px 6px;}
+      #conn-badge{font-size:10px;padding:2px 6px;}
+      #realtime-indicator{font-size:10px;top:50px;}
+      #global-timer-overlay{font-size:11px;top:50px;right:6px;}
+      #last-upload{font-size:10px;bottom:20px;}
+      .estado-label{font-size:9px;}
+    }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<!-- Barra superior -->
+<div id="top-bar">
+  <h6><i>🗺</i> Tecsycom – Visor</h6>
+  <select id="zone-select">
+    <option value="LIMA">LIMA</option>
+    <option value="PROVINCIA">PROVINCIA</option>
+  </select>
+  <span id="conn-badge" style="font-size:11px;background:#28a745;color:white;padding:2px 8px;border-radius:10px;">● En línea</span>
+</div>
+
+<div id="realtime-indicator">🔄 Mapa actualizado</div>
+<div id="global-timer-overlay"></div>
+<div id="last-upload"><span id="last-upload-label">Última carga: —</span></div>
+
+<!-- Agregar punto manual -->
+<button id="add-pin-toggle" title="Agregar punto de venta">📍</button>
+<div id="add-pin-panel">
+  <h6>Agregar punto de venta</h6>
+  <input id="pin-coords-input" type="text" placeholder="-12.011477, -76.870138">
+  <input id="pin-comment-input" type="text" placeholder="Comentario (opcional)">
+  <div class="btn-row">
+    <button id="pin-add-btn" class="action">Agregar</button>
+    <button id="pin-cancel-btn" class="action">Cancelar</button>
+  </div>
+  <div id="pin-error-msg"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ─── Supabase ─────────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://jxpeztieqwotfgswhzhx.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4cGV6dGllcXdvdGZnc3doemh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4MzQ4MDQsImV4cCI6MjA4NjQxMDgwNH0.Hf-lbGlP2OmH7Uh2LNKqwHkwHDp7yQV6O73aXw5NCZk';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function sbLoad(table, zone){
+  const {data,error}=await sb.from(table).select('data').eq('id',zone).single();
+  if(error) return null; return data?.data??null;
+}
+async function sbLoadGlobal(table){
+  const {data,error}=await sb.from(table).select('data').eq('id','global').single();
+  if(error) return null; return data?.data??null;
+}
+async function sbSave(table, zone, data){
+  const {error}=await sb.from(table).upsert({id:zone, zone, data, updated_at:new Date().toISOString()});
+  if(error) console.error(`sbSave ${table}:`, error);
+}
+
+// ─── Globals ──────────────────────────────────────────────────────────────────
+let map, markers=[], allRecords=[], customCoords=[], techImages={}, categoryImages={};
+let selectedZone='LIMA', countdownInterval=null, _realtimeChannel=null, _fadeTimer=null;
+const techColors={};
+
+// ─── Map init ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async()=>{
+  map=L.map('map').setView([-12.0464,-77.0428],12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',{attribution:'&copy; CartoDB'}).addTo(map);
+
+  const go=document.createElement('div');go.id='global-timer-overlay';go.style.display='none';
+  document.body.appendChild(go);
+
+  document.getElementById('zone-select').addEventListener('change',function(){
+    selectedZone=this.value;
+    loadZoneData(selectedZone);
+  });
+
+  // Cargar datos globales
+  const fbTI=await sbLoadGlobal('tech_images');
+  if(fbTI) techImages=fbTI;
+
+  const fbCI=await sbLoadGlobal('category_images');
+  if(fbCI){
+    const {_lastUpload,...imgs}=fbCI;
+    categoryImages=imgs;
+    if(_lastUpload) document.getElementById('last-upload-label').textContent=`Última carga: ${_lastUpload}`;
+  }
+
+  await loadZoneData(selectedZone);
+  startCountdownTimer();
+  await loadGpsMarkers();
+  subscribeGps();
+
+  setupManualPinUI();
+});
+
+// ─── Load zone ────────────────────────────────────────────────────────────────
+async function loadZoneData(zone){
+  const [recData,coordData]=await Promise.all([sbLoad('records',zone),sbLoad('coords',zone)]);
+  allRecords  =Array.isArray(recData)   ?recData   :(recData   ?Object.values(recData)   :[]);
+  customCoords=Array.isArray(coordData) ?coordData :(coordData ?Object.values(coordData) :[]);
+  // Sonar si hay sin técnico al cargar
+  const sinTecnico=allRecords.filter(r=>!r.Tecnico).length;
+  if(sinTecnico>0){playNotificationSound();showSinTecnicoAlert(sinTecnico);}
+  _prevSinTecnicoCount=sinTecnico;
+  renderMarkers();
+  subscribeToZone(zone);
+}
+
+// ─── Realtime ─────────────────────────────────────────────────────────────────
+function subscribeToZone(zone){
+  if(_realtimeChannel){sb.removeChannel(_realtimeChannel);_realtimeChannel=null;}
+  _realtimeChannel=sb.channel(`visor_${zone}`)
+    .on('postgres_changes',{event:'*',schema:'public',table:'records',filter:`id=eq.${zone}`},payload=>{
+      const inc=payload.new?.data; if(!inc) return;
+      allRecords=Array.isArray(inc)?inc:Object.values(inc);
+      checkNuevosSinTecnico(allRecords);
+      renderMarkers(); flashIndicator('Registros actualizados');
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'coords',filter:`id=eq.${zone}`},payload=>{
+      const inc=payload.new?.data; if(!inc) return;
+      customCoords=Array.isArray(inc)?inc:Object.values(inc);
+      renderMarkers(); flashIndicator('Coordenadas actualizadas');
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'tech_images',filter:`id=eq.global`},payload=>{
+      const inc=payload.new?.data; if(!inc) return;
+      techImages=inc; renderMarkers(); flashIndicator('Imágenes actualizadas');
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'category_images',filter:`id=eq.global`},payload=>{
+      const inc=payload.new?.data; if(!inc) return;
+      const {_lastUpload,...imgs}=inc;
+      categoryImages=imgs;
+      if(_lastUpload) document.getElementById('last-upload-label').textContent=`Última carga: ${_lastUpload}`;
+      renderMarkers(); flashIndicator('Actualizado');
+    })
+    .subscribe();
+}
+
+// ─── Sonido para nuevos registros sin técnico ─────────────────────────────────
+let _prevSinTecnicoCount=0;
+function checkNuevosSinTecnico(records){
+  const sinTecnico=records.filter(r=>!r.Tecnico).length;
+  if(_prevSinTecnicoCount>0 && sinTecnico>_prevSinTecnicoCount){
+    playNotificationSound();
+    showSinTecnicoAlert(sinTecnico);
+  }
+  _prevSinTecnicoCount=sinTecnico;
+}
+
+function showSinTecnicoAlert(total){
+  const el=document.getElementById('realtime-indicator');
+  if(!el) return;
+  if(window._fadeTimer) clearTimeout(window._fadeTimer);
+  el.classList.remove('fade-out');
+  el.classList.add('show');
+  el.style.background='rgba(220,53,69,0.92)';
+  el.innerHTML=`⚠ ${total} registro${total!==1?'s':''} sin técnico asignado`;
+  window._fadeTimer=setTimeout(()=>{
+    el.style.background='';
+    el.classList.add('fade-out');
+    setTimeout(()=>{el.classList.remove('show','fade-out');el.style.background='';},600);
+  },6000);
+}
+
+function playNotificationSound(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const playTone=(freq,start,dur)=>{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.frequency.value=freq;osc.type='sine';
+      gain.gain.setValueAtTime(0.3,ctx.currentTime+start);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
+      osc.start(ctx.currentTime+start);osc.stop(ctx.currentTime+start+dur);
+    };
+    playTone(880,0,0.15);playTone(1100,0.18,0.15);
+    if(Notification.permission==='granted'){
+      new Notification('Nueva orden sin técnico',{body:'Hay registros nuevos sin técnico asignado',icon:'https://cdn-icons-png.flaticon.com/512/1865/1865269.png'});
+    }
+  }catch(e){console.warn('Audio:',e);}
+}
+
+function flashIndicator(msg){
+  const el=document.getElementById('realtime-indicator');if(!el)return;
+  if(_fadeTimer)clearTimeout(_fadeTimer);
+  el.classList.remove('fade-out');el.classList.add('show');
+  el.textContent=`🔄 ${msg}`;
+  _fadeTimer=setTimeout(()=>{el.classList.add('fade-out');setTimeout(()=>el.classList.remove('show','fade-out'),600);},3000);
+}
+
+// ─── GPS tracking en tiempo real ──────────────────────────────────────────────
+let gpsMarkers={}, gpsLeafletMarkers={}, _gpsChannel=null;
+
+async function loadGpsMarkers(){
+  const{data,error}=await sb.from('user_locations').select('*');
+  if(error||!data) return;
+  data.forEach(u=>{gpsMarkers[u.id]={nombre:u.nombre,lat:u.lat,lng:u.lng,updated_at:u.updated_at};});
+  renderGpsMarkers();
+}
+
+function subscribeGps(){
+  if(_gpsChannel){sb.removeChannel(_gpsChannel);_gpsChannel=null;}
+  _gpsChannel=sb.channel('visor_gps_tracking')
+    .on('postgres_changes',{event:'*',schema:'public',table:'user_locations'},payload=>{
+      if(payload.eventType==='DELETE'){
+        delete gpsMarkers[payload.old?.id];
+      } else {
+        const u=payload.new;
+        if(u) gpsMarkers[u.id]={nombre:u.nombre,lat:u.lat,lng:u.lng,updated_at:u.updated_at};
+      }
+      renderGpsMarkers();
+    })
+    .subscribe();
+  // Polling cada 5 segundos como respaldo
+  if(window._visorGpsPolling) clearInterval(window._visorGpsPolling);
+  window._visorGpsPolling=setInterval(async()=>{
+    const{data,error}=await sb.from('user_locations').select('*');
+    if(error||!data) return;
+    let changed=false;
+    data.forEach(u=>{
+      const prev=gpsMarkers[u.id];
+      if(!prev||prev.lat!==u.lat||prev.lng!==u.lng||prev.updated_at!==u.updated_at){
+        gpsMarkers[u.id]={nombre:u.nombre,lat:u.lat,lng:u.lng,updated_at:u.updated_at};
+        changed=true;
+      }
+    });
+    Object.keys(gpsMarkers).forEach(id=>{
+      if(!data.find(u=>u.id===id)){delete gpsMarkers[id];changed=true;}
+    });
+    if(changed) renderGpsMarkers();
+  },5000);
+}
+
+function renderGpsMarkers(){
+  // Eliminar markers que ya no están
+  Object.keys(gpsLeafletMarkers).forEach(id=>{
+    if(!gpsMarkers[id]){map.removeLayer(gpsLeafletMarkers[id]);delete gpsLeafletMarkers[id];}
+  });
+  // Mover o crear
+  Object.entries(gpsMarkers).forEach(([id,u])=>{
+    if(gpsLeafletMarkers[id]){
+      gpsLeafletMarkers[id].setLatLng([u.lat,u.lng]);
+    } else {
+      const iconHtml=`<div style="position:relative;text-align:center;background:transparent;"><div style="font-size:22px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.4));">🚗</div><div style="background:white;color:#333;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:8px;white-space:nowrap;margin-top:2px;box-shadow:0 1px 4px rgba(0,0,0,0.25);border:1px solid #ddd;">${u.nombre}</div></div>`;
+      const marker=L.marker([u.lat,u.lng],{icon:L.divIcon({className:'',html:iconHtml,iconSize:[80,50],iconAnchor:[16,16]}),zIndexOffset:2000}).addTo(map);
+      const mins=Math.floor((Date.now()-new Date(u.updated_at))/60000);
+      marker.bindPopup(`<div style="font-size:13px;"><strong>🚗 ${u.nombre}</strong><br><span style="color:#555;font-size:11px;">Hace ${mins<1?'menos de 1':mins} min</span></div>`);
+      gpsLeafletMarkers[id]=marker;
+    }
+  });
+}
+
+// ─── Puntos de Venta (guardados en Supabase → tabla "coords", igual que el resto
+//     de coordenadas del sistema, así se ven en tiempo real en el mapa del técnico) ──
+function escapeHtml(str){
+  return String(str||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function parseCoordsInput(text){
+  if(!text)return null;
+  const parts=text.split(',').map(s=>s.trim()).filter(Boolean);
+  if(parts.length!==2)return null;
+  const lat=parseFloat(parts[0]),lng=parseFloat(parts[1]);
+  if(isNaN(lat)||isNaN(lng))return null;
+  if(lat<-90||lat>90||lng<-180||lng>180)return null;
+  return{lat,lng};
+}
+async function addVentaPoint(lat,lng,comment){
+  const point={id:'venta_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),lat,lng,category:'Venta',note:comment||'',zone:selectedZone};
+  customCoords.push(point);
+  await sbSave('coords',selectedZone,customCoords);
+  renderMarkers();
+}
+window.deleteVentaPoint=async function(id){
+  if(!confirm('¿Eliminar este punto de venta?'))return;
+  customCoords=customCoords.filter(c=>c.id!==id);
+  await sbSave('coords',selectedZone,customCoords);
+  renderMarkers();
+};
+function setupManualPinUI(){
+  const toggleBtn=document.getElementById('add-pin-toggle');
+  const panel=document.getElementById('add-pin-panel');
+  const errEl=document.getElementById('pin-error-msg');
+  const coordsInput=document.getElementById('pin-coords-input');
+  const commentInput=document.getElementById('pin-comment-input');
+  const addBtn=document.getElementById('pin-add-btn');
+
+  toggleBtn.addEventListener('click',()=>{
+    panel.style.display=(panel.style.display==='block')?'none':'block';
+    errEl.style.display='none';
+  });
+  document.getElementById('pin-cancel-btn').addEventListener('click',()=>{
+    panel.style.display='none';
+    errEl.style.display='none';
+    coordsInput.value='';commentInput.value='';
+  });
+  addBtn.addEventListener('click',async()=>{
+    const parsed=parseCoordsInput(coordsInput.value);
+    if(!parsed){
+      errEl.textContent='Formato inválido. Usa: -12.011477, -76.870138';
+      errEl.style.display='block';
+      return;
+    }
+    errEl.style.display='none';
+    addBtn.disabled=true; addBtn.textContent='Guardando...';
+    await addVentaPoint(parsed.lat,parsed.lng,commentInput.value.trim());
+    addBtn.disabled=false; addBtn.textContent='Agregar';
+    map.setView([parsed.lat,parsed.lng],16);
+    coordsInput.value='';commentInput.value='';
+    panel.style.display='none';
+  });
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderMarkers(){
+  markers.forEach(m=>map.removeLayer(m)); markers=[];
+  const colors=['#4285F4','#EA4335','#FBBC05','#34A853','#8E24AA'];
+  [...new Set(allRecords.map(r=>r.Tecnico).filter(Boolean))].forEach((t,i)=>{if(!techColors[t])techColors[t]=colors[i%colors.length];});
+  techColors['sin_tecnico']='#9E9E9E';
+
+  allRecords.forEach(record=>{
+    const lat=record.latitud_Y,lng=record.longitud_X; if(!lat||!lng)return;
+    const estado=record.Estado||'N/A';
+    const color=record.Tecnico&&techColors[record.Tecnico]?techColors[record.Tecnico]:techColors['sin_tecnico'];
+    const imgSrc=record.Tecnico?techImages[record.Tecnico]:techImages['sin_tecnico'];
+    const sinTecnico=!record.Tecnico;
+
+    // Detectar vencimiento
+    const match=estado.match(/(8\/12|12\/16|16\/20)/);
+    const esPend=match&&/(pendiente|coord)/i.test(estado);
+    const iv=esPend?getInterval(match[1]):null;
+    const now=new Date(),nowSegs=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
+    const venceSegs=iv?iv.end*3600:null;
+    const yaVencio=venceSegs&&nowSegs>=venceSegs;
+
+    const flechaHtml=sinTecnico&&!yaVencio?`<div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:20px;line-height:1;z-index:9998;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));animation:arrowBounce 1s ease-in-out infinite alternate;">▼</div>`:'';
+    const vencidoHtml=yaVencio?`<div class="countdown-overlay" style="display:block;background:rgba(200,0,0,0.90);color:white;font-weight:bold;position:absolute;top:-18px;left:0;min-width:55px;white-space:nowrap;font-size:10px;padding:2px 5px;border-radius:3px;z-index:9999;pointer-events:none;overflow:visible;">VENCIDO</div>`:'';
+
+    // Flecha → roja para registros con Agencia: VENTA
+    const esAgenciaVenta=record.Agencia&&String(record.Agencia).trim().toUpperCase()==='VENTA';
+    const flechaVentaHtml=esAgenciaVenta?`<div style="position:absolute;top:50%;right:-20px;transform:translateY(-50%);font-size:18px;line-height:1;z-index:9998;pointer-events:none;color:#FF0000;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));animation:arrowBounceRight 0.8s ease-in-out infinite alternate;">◀</div>`:'';
+
+    // Venta finalizada → efecto de "ganador" al hacer clic en el pin
+    const esVentaFinalizada=esAgenciaVenta&&/FINALIZAD/i.test(String(estado).trim());
+
+    // Badge 🛡️ top-left: Negocio GARANTÍA
+    const esGarantia=record.Negocio&&['GARANTÍA','GARANTIA'].includes(String(record.Negocio).trim().toUpperCase());
+    const garantiaHtml=esGarantia?`<div style="position:absolute;top:-12px;left:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">🛡️</div>`:'';
+
+    // Badge ♻️ top-right: reiterativo
+    const esReiterativo=record.Reiterativo&&['SI','SÍ','S'].includes(String(record.Reiterativo).trim().toUpperCase());
+    const reiterativoHtml=esReiterativo?`<div style="position:absolute;top:-12px;right:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">♻️</div>`:'';
+
+    // Badge 🚚 bottom-left: Negocio POSTVENTA / DUPLICADO ⛔
+    const esPostventa=record.Negocio&&['POSTVENTA'].includes(String(record.Negocio).trim().toUpperCase());
+    const esDuplicado=record.Estado2&&String(record.Estado2).trim().toUpperCase()==='DUPLICADO';
+    const postventaHtml=esPostventa?`<div style="position:absolute;bottom:-12px;left:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">🚚</div>`:esDuplicado?`<div style="position:absolute;bottom:-12px;left:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">⛔</div>`:'';
+
+    // Badge 🔌 bottom-right: Negocio AVERÍAS
+    const esAveria=record.Negocio&&['AVERÍAS','AVERIAS'].includes(String(record.Negocio).trim().toUpperCase());
+    const averiaHtml=esAveria?`<div style="position:absolute;bottom:-12px;right:-12px;z-index:9999;pointer-events:none;font-size:15px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));">🔌</div>`:'';
+
+    let marker;
+    if(imgSrc){
+      const iconHtml=`<div style="position:relative;width:30px;height:30px;overflow:visible;">${flechaHtml}${flechaVentaHtml}${garantiaHtml}${reiterativoHtml}${postventaHtml}${averiaHtml}${vencidoHtml}<img src="${imgSrc}" style="width:30px;height:30px;border-radius:50%;"/></div>`;
+      marker=L.marker([lat,lng],{icon:L.divIcon({className:'',html:iconHtml,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map);
+      marker.bindTooltip(estado,{permanent:true,direction:'right',className:'estado-label',offset:[5,0]});
+    } else {
+      let html=`<div style="position:relative;overflow:visible;">${flechaHtml}${flechaVentaHtml}${garantiaHtml}${reiterativoHtml}${postventaHtml}${averiaHtml}${vencidoHtml}<div class="custom-pin" style="--color:${color}">${estado.charAt(0)}</div></div>`;
+      html+=`<div class="estado-label">${estado}</div>`;
+      marker=L.marker([lat,lng],{icon:L.divIcon({className:'custom-marker-container',html,iconSize:[100,30],iconAnchor:[15,15]})}).addTo(map);
+    }
+    marker.bindPopup(`<div style="font-size:13px;min-width:140px;"><strong>Técnico:</strong> ${record.Tecnico||'<em>Sin asignar</em>'}<br><strong>Negocio:</strong> ${record.Negocio||'—'}</div>`);
+    marker.record=record;
+    if(esVentaFinalizada){
+      marker.on('click',function(e){
+        const pt=map.latLngToContainerPoint(e.latlng);
+        const rect=map.getContainer().getBoundingClientRect();
+        launchWinnerEffect(rect.left+pt.x, rect.top+pt.y);
+      });
+    }
+    markers.push(marker);
+  });
+
+  // Coordenadas KML + Puntos de Venta
+  customCoords.forEach(c=>{
+    if(c.zone!==selectedZone)return;
+    const catColors={'Zona sin Cobertura':'#FF5722','Sin FFTT':'#9C27B0','Zona Peligrosa':'#F44336','Dirección de Técnicos':'#3F51B5','Venta':'#FF6D00'};
+    const imgKey=`${c.category}-${c.zone||selectedZone}`;
+    const imgSrc=categoryImages[imgKey]||c.imgData||null;
+    let marker;
+    if(imgSrc){
+      const iconHtml=`<div style="position:relative;width:30px;height:30px;overflow:visible;"><img src="${imgSrc}" style="width:30px;height:30px;border-radius:50%;"/></div>`;
+      marker=L.marker([c.lat,c.lng],{icon:L.divIcon({className:'',html:iconHtml,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map);
+    } else if(c.category==='Venta'){
+      const iconHtml=`<div style="font-size:30px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));">📍</div>`;
+      marker=L.marker([c.lat,c.lng],{icon:L.divIcon({className:'',html:iconHtml,iconSize:[30,30],iconAnchor:[15,30]}),zIndexOffset:2500}).addTo(map);
+    } else {
+      const col=catColors[c.category]||'#607D8B';
+      marker=L.marker([c.lat,c.lng],{icon:L.divIcon({className:'custom-pin',html:`<div class="custom-pin" style="--color:${col}">?</div>`,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(map);
+    }
+    if(c.category==='Dirección de Técnicos'&&c.note){
+      marker.bindTooltip(c.note,{permanent:true,direction:'right',className:'estado-label',offset:[5,0]});
+    } else if(c.category==='Venta'){
+      const comentario=c.note?escapeHtml(c.note):'<em>Sin comentario</em>';
+      marker.bindPopup(`<div style="font-size:13px;max-width:200px;"><strong>📍 Venta</strong><br>${comentario}<br><button onclick="deleteVentaPoint('${c.id}')" style="margin-top:6px;background:#dc3545;color:#fff;border:none;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;">🗑️ Eliminar</button></div>`);
+    } else {
+      marker.bindPopup(`<strong>${c.category}</strong><br>${c.note||''}`);
+    }
+    markers.push(marker);
+  });
+
+  if(markers.length>0) map.fitBounds(new L.featureGroup(markers).getBounds(),{padding:[50,50]});
+}
+
+// ─── Countdown ────────────────────────────────────────────────────────────────
+function startCountdownTimer(){if(countdownInterval)clearInterval(countdownInterval);countdownInterval=setInterval(updateCountdowns,1000);}
+
+function updateCountdowns(){
+  const now=new Date(),nowSegs=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
+  let soon=0;
+  markers.forEach(marker=>{
+    if(!marker.record||!marker.record.Estado)return;
+    const estado=marker.record.Estado;
+    const match=estado.match(/(8\/12|12\/16|16\/20)/);
+    if(!match||!/(pendiente|coord)/i.test(estado))return;
+    const iv=getInterval(match[1]); if(!iv)return;
+    const venceSegs=iv.end*3600,alertaSegs=venceSegs-3600,restaSegs=venceSegs-nowSegs;
+    let el=null; try{el=marker.getElement();}catch(e){}if(!el)return;
+    let ov=el.querySelector('.countdown-overlay');
+    if(nowSegs>=venceSegs){
+      if(!ov){ov=document.createElement('div');ov.className='countdown-overlay';el.insertBefore(ov,el.firstChild);}
+      ov.style.cssText='display:block!important;background:rgba(200,0,0,0.92)!important;color:white!important;font-weight:bold!important;position:absolute!important;top:-18px!important;left:0!important;min-width:55px!important;white-space:nowrap!important;font-size:10px!important;padding:2px 5px!important;border-radius:3px!important;z-index:9999!important;pointer-events:none!important;overflow:visible!important;';
+      ov.textContent='VENCIDO'; return;
+    }
+    if(nowSegs>=alertaSegs&&nowSegs<venceSegs){
+      const mm=Math.floor(restaSegs/60),ss=Math.floor(restaSegs%60);
+      if(!ov){ov=document.createElement('div');ov.className='countdown-overlay';el.insertBefore(ov,el.firstChild);}
+      ov.style.cssText='display:block!important;background:rgba(200,0,0,0.85)!important;color:white!important;font-weight:bold!important;position:absolute!important;top:-18px!important;left:0!important;min-width:45px!important;white-space:nowrap!important;font-size:10px!important;padding:2px 5px!important;border-radius:3px!important;z-index:9999!important;pointer-events:none!important;overflow:visible!important;';
+      ov.textContent=`⚠ ${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'00')}`;
+      soon++;
+    } else {if(ov)ov.style.display='none';}
+  });
+  const go=document.getElementById('global-timer-overlay');
+  if(go){go.style.display=soon>0?'block':'none';if(soon>0)go.textContent=`⚠ ${soon} pendiente${soon!==1?'s':''} por vencer`;}
+}
+
+function getInterval(tr){
+  if(!tr)return null;
+  return [{name:'8/12',start:8,end:12},{name:'12/16',start:12,end:16},{name:'16/20',start:16,end:20}].find(i=>i.name===tr.trim())||null;
+}
+
+function shouldFormat(estado){
+  if(!estado)return false;
+  return /(8\/12|12\/16|16\/20)/.test(estado)&&/(pendiente|coord)/i.test(estado);
+}
+
+// ─── Efecto "ganador" (fuegos artificiales) para ventas finalizadas ───────────
+function launchWinnerEffect(x,y){
+  const canvas=document.createElement('canvas');
+  canvas.style.cssText='position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:99999;';
+  canvas.width=window.innerWidth;canvas.height=window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx=canvas.getContext('2d');
+  const colors=['#FFD700','#FF4136','#2ECC40','#0074D9','#FF851B','#B10DC9','#01FF70','#F012BE'];
+  let particles=[];
+
+  function burst(cx,cy){
+    const count=55;
+    for(let i=0;i<count;i++){
+      const angle=Math.random()*Math.PI*2;
+      const speed=2+Math.random()*6;
+      particles.push({
+        x:cx,y:cy,
+        vx:Math.cos(angle)*speed,
+        vy:Math.sin(angle)*speed,
+        color:colors[Math.floor(Math.random()*colors.length)],
+        life:0,
+        maxLife:45+Math.random()*30,
+        size:2+Math.random()*3
+      });
+    }
+  }
+
+  // Varias ráfagas escalonadas, tipo fuegos artificiales
+  burst(x,y-70);
+  setTimeout(()=>burst(x-85,y-110),180);
+  setTimeout(()=>burst(x+85,y-100),350);
+
+  let frame=0;
+  const maxFrames=115;
+  (function animate(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p=>{
+      p.vy+=0.05;
+      p.x+=p.vx;p.y+=p.vy;p.life++;
+      const alpha=Math.max(0,1-p.life/p.maxLife);
+      ctx.globalAlpha=alpha;
+      ctx.fillStyle=p.color;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+      ctx.fill();
+    });
+    particles=particles.filter(p=>p.life<p.maxLife);
+    frame++;
+    if(frame<maxFrames){
+      requestAnimationFrame(animate);
+    } else {
+      canvas.remove();
+    }
+  })();
+
+  // Mensaje flotante de venta finalizada
+  const msg=document.createElement('div');
+  msg.textContent='🎉 ¡Venta Finalizada! 🎉';
+  msg.style.cssText=`position:fixed;left:${x}px;top:${y-150}px;transform:translateX(-50%);z-index:100000;background:rgba(0,0,0,0.78);color:#FFD700;font-weight:bold;font-size:14px;padding:6px 14px;border-radius:20px;pointer-events:none;white-space:nowrap;animation:winnerPop 2.3s ease forwards;`;
+  document.body.appendChild(msg);
+  setTimeout(()=>msg.remove(),2350);
+}
+</script>
+</body>
+</html>
